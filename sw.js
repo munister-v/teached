@@ -1,4 +1,4 @@
-const CACHE = 'teachedos-v42';
+const CACHE = 'teachedos-v43';
 const BASE_PATH = new URL(self.registration.scope).pathname;
 const base = path => new URL(path, self.registration.scope).pathname;
 
@@ -94,7 +94,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
   // API — network-first
-  if (url.hostname.includes('onrender.com') || url.pathname.startsWith('/api/')) {
+  if (url.pathname.startsWith('/api/')) {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }

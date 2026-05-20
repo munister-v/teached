@@ -1,5 +1,21 @@
 (function () {
-  const API_BASE = 'https://teachedos-api.onrender.com';
+  function cleanApiBase(value) {
+    return String(value || '').trim().replace(/\/+$/, '');
+  }
+
+  function resolveApiBase() {
+    const explicit =
+      window.TEACHED_API_BASE ||
+      window.TeachEdConfig?.API_BASE ||
+      document.querySelector('meta[name="teached-api-base"]')?.content ||
+      localStorage.getItem('teached_api_base');
+    if (explicit) return cleanApiBase(explicit);
+
+    const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    return isLocal ? 'http://localhost:8080' : location.origin;
+  }
+
+  const API_BASE = resolveApiBase();
   const DEFAULT_TIME_ZONE = 'Europe/Kyiv';
   const PLAN_CATALOG = {
     free: {

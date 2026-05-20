@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+.claude
+node_modules
+backend/node_modules
+ng/node_modules
+ng/dist
+uploads
+*.log
+.env
+.env.*
+!.env.example
+Dockerfile.local

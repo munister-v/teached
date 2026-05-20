@@ -328,7 +328,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="scripts/app-core.js"></script>
 <script>
-const API = 'https://teachedos-api.onrender.com';
+const API = (window.TeachEdApp?.API_BASE || window.TEACHED_API_BASE || (['localhost','127.0.0.1'].includes(location.hostname) ? 'http://localhost:8080' : location.origin)).replace(/\/+$/, '');
 let token = localStorage.getItem('teachedos_token');
 let boards = [];
 let activeBoardId = localStorage.getItem('teachedos_board_id') || null;

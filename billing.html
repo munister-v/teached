@@ -203,7 +203,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);min-height:10
 </div>
 
 <script>
-const API_BASE = 'https://teachedos-api.onrender.com';
+const API_BASE = (window.TeachEdApp?.API_BASE || window.TEACHED_API_BASE || (['localhost','127.0.0.1'].includes(location.hostname) ? 'http://localhost:8080' : location.origin)).replace(/\/+$/, '');
 const _token = localStorage.getItem('teachedos_token');
 
 const PLANS = {
