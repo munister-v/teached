@@ -858,6 +858,62 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .card-comment-badge:hover{transform:scale(1.10);box-shadow:0 3px 10px rgba(0,0,0,.22);}
 .card-comment-badge svg{width:11px;height:11px;}
 
+/* Miro-style board comment composer */
+#board-comment-composer{
+  position:fixed;left:0;top:0;z-index:10040;display:none;align-items:center;gap:8px;
+  width:min(560px,calc(100vw - 24px));min-height:58px;padding:8px 10px 8px 16px;
+  border-radius:999px;background:rgba(255,255,255,.98);border:1px solid rgba(12,12,24,.10);
+  box-shadow:0 18px 46px rgba(12,12,24,.18),0 2px 8px rgba(12,12,24,.08);
+  color:#111827;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+#board-comment-composer.show{display:flex;}
+#board-comment-input{
+  flex:1;min-width:0;height:36px;border:0!important;outline:0!important;background:transparent!important;
+  color:#111827!important;font:600 16px/1.3 var(--font);padding:0;
+}
+#board-comment-input::placeholder{color:rgba(17,24,39,.46);}
+.comment-composer-action{
+  width:36px;height:36px;border:0;border-radius:999px;background:rgba(17,24,39,.06);
+  color:#111827;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:18px;transition:background .12s,transform .12s,color .12s;
+}
+.comment-composer-action:hover{background:rgba(17,24,39,.10);transform:translateY(-1px);}
+.comment-composer-send{
+  background:#9EC41A;color:#fff;font-size:16px;box-shadow:0 8px 20px rgba(158,196,26,.22);
+}
+.comment-composer-send:hover{background:#8EB315;color:#fff;}
+.comment-composer-close{font-size:20px;color:rgba(17,24,39,.45);}
+@media(max-width:860px){
+  #board-comment-composer{
+    left:10px!important;right:10px!important;width:auto;max-width:none;
+    transform:none!important;border-radius:22px;min-height:54px;
+  }
+  #board-comment-input{font-size:16px;}
+}
+
+/* Board-level comment cards created from the composer */
+.board-card.card-comment{
+  background:transparent!important;border:0!important;box-shadow:none!important;overflow:visible!important;
+  min-width:190px!important;min-height:46px!important;
+}
+.card-comment .card-header{display:none!important;}
+.comment-card-body{width:100%;height:100%;display:flex;align-items:center;overflow:visible!important;}
+.comment-thread-chip{
+  display:flex;align-items:center;gap:9px;max-width:100%;min-height:44px;padding:7px 12px 7px 8px;
+  border-radius:999px;background:#fff;color:#172033;border:1px solid rgba(12,12,24,.10);
+  box-shadow:0 10px 26px rgba(12,12,24,.13),0 2px 6px rgba(12,12,24,.08);
+  font:700 13px/1.25 var(--font);cursor:pointer;
+}
+.comment-thread-avatar{
+  width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:#F6E58D;color:#172033;font-size:16px;flex:0 0 auto;
+}
+.comment-thread-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px;}
+.comment-thread-time{font-size:11px;color:rgba(23,32,51,.46);font-weight:800;margin-left:2px;}
+.board-card.card-comment.selected .comment-thread-chip{
+  box-shadow:0 0 0 2px #4262FF,0 14px 32px rgba(12,12,24,.16);
+}
+
 /* Legacy single SE resize handle - kept hidden, replaced by 8-handle system */
 .card-resize{display:none;}
 
@@ -2555,6 +2611,13 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   <button id="mt-fit" style="display:none;" onclick="document.getElementById('btn-fit').click()"></button>
 </div>
 
+<div id="board-comment-composer" aria-label="Add board comment">
+  <input id="board-comment-input" type="text" autocomplete="off" placeholder="Add a comment. Use @ to mention.">
+  <button class="comment-composer-action" type="button" id="board-comment-emoji" title="Emoji">☺+</button>
+  <button class="comment-composer-action comment-composer-send" type="button" id="board-comment-send" title="Send comment">➤</button>
+  <button class="comment-composer-action comment-composer-close" type="button" id="board-comment-close" title="Cancel">×</button>
+</div>
+
 <!-- SHAPE PANEL -->
 <div id="shape-panel">
   <span class="sp-title">Shapes</span>
@@ -3619,6 +3682,7 @@ function toast(msg) {
 function getDefaults(type) {
   return ({ sticky:{w:180,h:180}, plan:{w:280,h:200}, student:{w:240,h:160},
             event:{w:200,h:140},  note:{w:300,h:240}, text:{w:180,h:80},
+            comment:{w:240,h:58},
             image:{w:280,h:220},  game:{w:340,h:300},
             lesson:{w:260,h:210}, assignment:{w:240,h:200}, milestone:{w:210,h:220},
             vocab:{w:220,h:200},  checklist:{w:220,h:200},  timer:{w:180,h:140},
@@ -3696,6 +3760,7 @@ function renderCard(card) {
   // Dispatch renderers
   if      (card.type === 'sticky')     renderSticky(el, card);
   else if (card.type === 'text')       renderText(el, card);
+  else if (card.type === 'comment')    renderCommentCard(el, card);
   else if (card.type === 'plan')       renderPlan(el, card);
   else if (card.type === 'student')    renderStudent(el, card);
   else if (card.type === 'note')       renderNote(el, card);
@@ -3946,6 +4011,33 @@ function fitStickyText(ta, card) {
   else if (value.length > 95 || density > 7.5) size = 16;
   else if (value.length > 48 || density > 4.7) size = 19;
   ta.style.fontSize = size + 'px';
+}
+
+function renderCommentCard(el, card) {
+  const d = card.data || {};
+  const body = document.createElement('div');
+  body.className = 'card-body comment-card-body';
+  const text = String(d.body || d.text || 'Comment').trim() || 'Comment';
+  const fallbackName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || 'Teacher';
+  const name = d.author || fallbackName;
+  const initials = name
+    .split(/\s|@/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || '💬';
+  const time = d.createdAt ? new Date(d.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : 'now';
+  body.innerHTML = `
+    <div class="comment-thread-chip" title="${esc(text)}">
+      <div class="comment-thread-avatar">${esc(initials)}</div>
+      <div class="comment-thread-text">${esc(text)}</div>
+      <div class="comment-thread-time">${esc(time)}</div>
+    </div>`;
+  body.querySelector('.comment-thread-chip')?.addEventListener('dblclick', e => {
+    e.stopPropagation();
+    toast && toast(text);
+  });
+  el.appendChild(body);
 }
 
 function renderText(el, card) {
@@ -6141,6 +6233,10 @@ boardWrap.addEventListener('mousedown', e => {
 });
 
 boardWrap.addEventListener('click', e => {
+  if (_miroTool === 'comment') {
+    _handleCommentClick(e);
+    return;
+  }
   if (!_pendingPlace) return;
   if (_isPlacementBlockedTarget(e.target)) return;
   e.preventDefault(); e.stopPropagation();
@@ -6899,7 +6995,7 @@ function toggleCommentMode() {
     boardWrap.classList.add('commenting');
     document.querySelectorAll('.mt-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('mt-comment')?.classList.add('active');
-    toast && toast('Click anywhere on the board to add a comment');
+    toast && toast('Click the board to add a comment');
   }
 }
 function disableCommentMode() {
@@ -6907,28 +7003,130 @@ function disableCommentMode() {
   boardWrap.classList.remove('commenting');
   document.getElementById('mt-comment')?.classList.remove('active');
   document.getElementById('mt-select')?.classList.add('active');
+  hideBoardCommentComposer();
 }
+
+let _commentComposerBoardPos = null;
+
+function clampCommentComposer(left, top, composer) {
+  const margin = 12;
+  const w = composer.offsetWidth || 560;
+  const h = composer.offsetHeight || 58;
+  return {
+    left: Math.min(window.innerWidth - w - margin, Math.max(margin, left)),
+    top: Math.min(window.innerHeight - h - margin, Math.max(margin, top)),
+  };
+}
+
+function showBoardCommentComposer(clientX, clientY, boardPos) {
+  const composer = document.getElementById('board-comment-composer');
+  const input = document.getElementById('board-comment-input');
+  if (!composer || !input) return;
+  _commentComposerBoardPos = boardPos;
+  input.value = '';
+  composer.classList.add('show');
+  composer.style.visibility = 'hidden';
+  composer.style.left = '0px';
+  composer.style.top = '0px';
+  requestAnimationFrame(() => {
+    const p = clampCommentComposer(clientX - 18, clientY - 28, composer);
+    composer.style.left = p.left + 'px';
+    composer.style.top = p.top + 'px';
+    composer.style.visibility = '';
+    input.focus();
+  });
+}
+
+function hideBoardCommentComposer() {
+  const composer = document.getElementById('board-comment-composer');
+  if (composer) {
+    composer.classList.remove('show');
+    composer.style.visibility = '';
+  }
+  _commentComposerBoardPos = null;
+}
+
+function submitBoardCommentComposer() {
+  const input = document.getElementById('board-comment-input');
+  const text = input?.value.trim();
+  if (!text) {
+    input?.focus();
+    return;
+  }
+  const pos = _commentComposerBoardPos || getBoardViewportCenter();
+  const def = getDefaults('comment');
+  const author = (typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || 'Teacher';
+  const card = addCard('comment', pos.x, pos.y - def.h / 2, {
+    body: text,
+    author,
+    createdAt: new Date().toISOString(),
+  }, def.w, def.h);
+  hideBoardCommentComposer();
+  disableCommentMode();
+  if (card) {
+    clearSelection();
+    selectCard(card.id);
+  }
+  scheduleSave && scheduleSave();
+  saveLocal && saveLocal();
+}
+
+document.getElementById('board-comment-composer')?.addEventListener('mousedown', e => e.stopPropagation());
+document.getElementById('board-comment-composer')?.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+document.getElementById('board-comment-send')?.addEventListener('click', e => {
+  e.stopPropagation();
+  submitBoardCommentComposer();
+});
+document.getElementById('board-comment-close')?.addEventListener('click', e => {
+  e.stopPropagation();
+  hideBoardCommentComposer();
+  disableCommentMode();
+});
+document.getElementById('board-comment-emoji')?.addEventListener('click', e => {
+  e.stopPropagation();
+  const input = document.getElementById('board-comment-input');
+  if (!input) return;
+  const start = input.selectionStart ?? input.value.length;
+  input.value = input.value.slice(0, start) + '🙂' + input.value.slice(start);
+  input.focus();
+  input.setSelectionRange(start + 2, start + 2);
+});
+document.getElementById('board-comment-input')?.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    submitBoardCommentComposer();
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    hideBoardCommentComposer();
+    disableCommentMode();
+  }
+});
+
 // Handle click in comment mode (wired into the main mousedown handler)
 function _handleCommentClick(e) {
   if (_miroTool !== 'comment') return false;
+  if (e.target.closest('#board-comment-composer')) return true;
+  if (_isPlacementBlockedTarget(e.target)) return false;
   const bp = screenToBoard(e.clientX, e.clientY);
   if (!bp) return false;
-  const text = prompt('Comment:', '');
-  if (text === null) return true; // cancelled
-  const def = getDefaults('sticky');
-  const c = addCard('sticky', bp.x - def.w/2, bp.y - def.h/2, {
-    text: text || '💬',
-    color: '#FEF3C7',
-    isComment: true
-  });
-  if (c) {
-    const el = getCardEl(c.id);
-    if (el) el.style.border = '2px solid #F59E0B';
-  }
-  disableCommentMode();
-  scheduleSave && scheduleSave();
+  e.preventDefault();
+  e.stopPropagation();
+  showBoardCommentComposer(e.clientX, e.clientY, bp);
   return true;
 }
+
+boardWrap.addEventListener('touchstart', e => {
+  if (_miroTool !== 'comment' || e.touches.length !== 1) return;
+  if (e.target.closest('#board-comment-composer')) return;
+  if (_isPlacementBlockedTarget(e.target)) return;
+  const t = e.touches[0];
+  const bp = screenToBoard(t.clientX, t.clientY);
+  e.preventDefault();
+  e.stopPropagation();
+  showBoardCommentComposer(t.clientX, t.clientY, bp);
+}, { passive: false });
 document.getElementById('btn-connect').addEventListener('click', toggleConnectMode);
 
 function nearestCardAnchor(card, sx, sy) {
