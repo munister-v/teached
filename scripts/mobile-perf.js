@@ -22,6 +22,8 @@
   let scrollTimer = null;
   let scrollRaf = 0;
   let resizeRaf = 0;
+  let imageTuneTimer = 0;
+  let lastVh = 0;
 
   // ── Inject perf CSS ──────────────────────────────────────────
   const css = document.createElement('style');
@@ -157,7 +159,12 @@
   function setViewportHeight() {
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     resizeRaf = requestAnimationFrame(() => {
-      root.style.setProperty('--app-vh', `${window.innerHeight * 0.01}px`);
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const next = viewportHeight * 0.01;
+      if (Math.abs(next - lastVh) >= 0.5) {
+        root.style.setProperty('--app-vh', `${next}px`);
+        lastVh = next;
+      }
       resizeRaf = 0;
     });
   }
@@ -182,6 +189,8 @@
   window.addEventListener('scroll', markScrolling, { passive: true, capture: true });
   document.addEventListener('touchmove', markScrolling, { passive: true, capture: true });
   window.addEventListener('resize', setViewportHeight, { passive: true });
+  window.visualViewport?.addEventListener('resize', setViewportHeight, { passive: true });
+  window.visualViewport?.addEventListener('scroll', setViewportHeight, { passive: true });
   window.addEventListener('orientationchange', () => setTimeout(setViewportHeight, 180), { passive: true });
 
   // ── Pause animations of offscreen elements ───────────────────
@@ -202,10 +211,14 @@
         img.setAttribute('loading', 'lazy');
       }
       if (!img.hasAttribute('decoding')) img.setAttribute('decoding', 'async');
-      if (!img.style.contentVisibility && !img.closest('[data-no-content-visibility]')) {
-        img.style.contentVisibility = 'auto';
-      }
     });
+  }
+
+  function scheduleImageTune() {
+    clearTimeout(imageTuneTimer);
+    imageTuneTimer = setTimeout(() => {
+      requestAnimationFrame(tuneImages);
+    }, 90);
   }
 
   function init() {
@@ -226,7 +239,7 @@
       muts.forEach(m => m.addedNodes.forEach(n => {
         if (n.nodeType === 1 && (n.tagName === 'IMG' || n.querySelector?.('img'))) need = true;
       }));
-      if (need) requestAnimationFrame(tuneImages);
+      if (need) scheduleImageTune();
     });
     const startObserver = () => mo.observe(document.body, { childList: true, subtree: true });
     if (document.body) startObserver();

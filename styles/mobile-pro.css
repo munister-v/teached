@@ -59,8 +59,8 @@
   /* ── Reset cream bg for mobile pages that use mp-* containers ── */
   .mp-shell {
     background: var(--mp-bg);
-    min-height: 100vh;
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(var(--app-vh, 1vh) * 100);
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
     /* prevent overscroll rubber-band jank */
     overscroll-behavior: none;
   }

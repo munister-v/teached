@@ -1,5 +1,10 @@
 /* Mobile integrity guard: keep pages stable on phones without layout zoom jumps. */
 @media (max-width: 860px) {
+  :root {
+    --mob-nav-h: 60px;
+    --mob-content-pb: calc(var(--mob-nav-h) + env(safe-area-inset-bottom, 0px) + 12px);
+  }
+
   html {
     width: 100%;
     max-width: 100%;
@@ -15,6 +20,54 @@
     overflow-x: hidden !important;
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  .mp-shell {
+    min-height: calc(var(--app-vh, 1vh) * 100) !important;
+    padding-bottom: var(--mob-content-pb) !important;
+  }
+
+  .mob-nav {
+    height: calc(var(--mob-nav-h) + env(safe-area-inset-bottom, 0px)) !important;
+    contain: layout paint style;
+    box-shadow: 0 -1px 0 rgba(14,14,16,0.06) !important;
+  }
+
+  .mob-nav-tab {
+    height: var(--mob-nav-h) !important;
+  }
+
+  body.board-page {
+    height: calc(var(--app-vh, 1vh) * 100);
+    min-height: calc(var(--app-vh, 1vh) * 100);
+    overflow: hidden !important;
+    padding-bottom: 0 !important;
+    position: fixed;
+    inset: 0;
+  }
+
+  body.board-page #board-wrap {
+    top: calc(var(--tb-h, 54px) + env(safe-area-inset-top, 0px)) !important;
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px)) !important;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+
+  body.board-page #mobile-quickbar {
+    height: auto;
+    min-height: 58px;
+    contain: layout paint style;
+    box-shadow: 0 8px 24px rgba(5,5,23,.14), 0 1px 3px rgba(0,0,0,.05) !important;
+  }
+
+  body.board-page .board-card:active {
+    transform: none !important;
+  }
+
+  body.board-page .tb-title {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(255,255,255,.92) !important;
   }
 
   input,
