@@ -1367,3 +1367,30 @@ body.os-desktop .wg-vocab-next {
 body.os-desktop .wg-vocab-next:hover {
   box-shadow: 0 16px 34px rgba(200,230,50,0.36) !important;
 }
+
+/* Board text toolbar must stay light even when the board theme is dark. */
+body.board-page .text-format-toolbar,
+body.board-page .text-format-toolbar * {
+  color-scheme: light !important;
+}
+
+body.board-page .text-format-toolbar .text-format-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-color: #ffffff !important;
+  color: #1c1c1e !important;
+  border: 1px solid rgba(20,20,22,.12) !important;
+  border-radius: 7px !important;
+  font: 700 11px var(--font) !important;
+  box-shadow: none !important;
+}
+
+body.board-page .text-format-toolbar .text-format-btn,
+body.board-page .text-format-toolbar .text-link-btn,
+body.board-page .text-format-toolbar .text-lock-btn,
+body.board-page .text-format-toolbar .text-bg-clear,
+body.board-page .text-format-toolbar .text-color-control {
+  background: #ffffff !important;
+  color: #1c1c1e !important;
+  border-color: rgba(20,20,22,.12) !important;
+}

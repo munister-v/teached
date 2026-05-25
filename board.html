@@ -978,13 +978,23 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 /* ── STICKY NOTES — Miro style (no header, pure color block) ── */
 .card-sticky{
   --sticky-ink:#172033;
-  background:var(--sticky-color,#FFE566)!important;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.42), rgba(255,255,255,0) 36%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 1px, rgba(0,0,0,.025) 1px 2px, transparent 2px 18px),
+    var(--sticky-color,#FFE566)!important;
   border:0!important;border-radius:2px!important;
   min-width:120px!important;min-height:120px!important;
   cursor:move;
   overflow:visible!important;
   box-shadow:0 10px 22px rgba(12,12,24,.14),0 2px 4px rgba(12,12,24,.10)!important;
   transition:box-shadow .15s ease, transform .15s ease;
+}
+.card-sticky::before{
+  content:"";position:absolute;inset:0;border-radius:2px;pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.30), transparent 18%),
+    linear-gradient(135deg, transparent calc(100% - 30px), rgba(0,0,0,.08) calc(100% - 29px), rgba(255,255,255,.36) 100%);
+  mix-blend-mode:soft-light;opacity:.72;
 }
 .card-sticky::after{
   content:"";position:absolute;left:10px;right:10px;bottom:-8px;height:12px;
@@ -1034,7 +1044,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   position:absolute!important;top:6px!important;right:6px!important;
   opacity:0;transition:opacity .15s,background .1s,color .1s;
 }
-.card-sticky:hover .sticky-close,.card-sticky.selected .sticky-close{opacity:1;}
+.card-sticky:hover .sticky-close,.card-sticky.selected .sticky-close,.card-sticky.sticky-editing .sticky-close{opacity:1;}
 /* Sticky floating toolbar — Miro-style popover above sticky */
 .sticky-toolbar{
   position:absolute;left:50%;top:-46px;transform:translateX(-50%) translateY(4px);
@@ -1052,7 +1062,8 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   .sticky-toolbar::-webkit-scrollbar{display:none;}
 }
 .card-sticky:hover .sticky-toolbar,
-.card-sticky.selected .sticky-toolbar{
+.card-sticky.selected .sticky-toolbar,
+.card-sticky.sticky-editing .sticky-toolbar{
   opacity:1;pointer-events:all;transform:translateX(-50%) translateY(0);
 }
 .sticky-close{
@@ -1103,7 +1114,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .event-topic{font-size:12px;font-weight:700;color:var(--text);margin-top:6px;}
 
 /* ── TEXT (Miro-style: invisible default, dashed on hover, blue when editing) ── */
-.card-text{background:transparent;box-shadow:none;border:1.5px solid transparent;}
+.card-text{background:transparent;box-shadow:none;border:1.5px solid transparent;overflow:visible!important;}
 .card-text:hover:not(.selected){border:1.5px dashed rgba(66,98,255,.40);}
 .card-text.selected{border-color:#4262FF;background:transparent;}
 .card-text:focus-within{
@@ -1111,14 +1122,18 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   background:rgba(255,255,255,.04);
   box-shadow:0 0 0 1px rgba(66,98,255,.20),0 4px 12px rgba(66,98,255,.10);
 }
-.card-text .card-body{padding:6px 8px;display:flex;flex-direction:column;gap:6px;}
+.card-text .card-body{padding:6px 8px;display:flex;flex-direction:column;gap:6px;overflow:visible;position:relative;}
 .text-format-toolbar{
-  display:none;align-items:center;gap:4px;flex-wrap:wrap;
-  padding:4px;border-radius:10px;background:rgba(255,255,255,.94);
+  position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);
+  display:none;align-items:center;gap:4px;flex-wrap:nowrap;
+  width:max-content;max-width:min(620px,calc(100vw - 24px));overflow-x:auto;
+  padding:5px;border-radius:12px;background:rgba(255,255,255,.98);
   border:1px solid rgba(20,20,22,.09);box-shadow:0 8px 24px rgba(0,0,0,.10);
-  backdrop-filter:blur(8px);z-index:24;
+  backdrop-filter:blur(8px);z-index:9800;color-scheme:light;
+  scrollbar-width:none;
 }
-.card-text.selected .text-format-toolbar,.card-text:hover .text-format-toolbar{display:flex;}
+.text-format-toolbar::-webkit-scrollbar{display:none;}
+.card-text.selected .text-format-toolbar,.card-text:hover .text-format-toolbar,.card-text:focus-within .text-format-toolbar{display:flex;}
 .text-format-btn,.text-link-btn,.text-lock-btn,.text-bg-clear{
   min-width:26px;height:24px;padding:0 7px;border:1px solid rgba(20,20,22,.12);
   border-radius:7px;background:#fff;color:#1c1c1e;font:800 11px/1 var(--font);
@@ -1128,8 +1143,10 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .text-format-btn.active,.text-lock-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .text-format-select{
   height:24px;max-width:116px;border:1px solid rgba(20,20,22,.12);
-  border-radius:7px;background:#fff;color:#1c1c1e;font:700 11px var(--font);
-  outline:none;padding:0 6px;
+  border-radius:7px;background-color:#fff!important;color:#1c1c1e!important;font:700 11px var(--font);
+  outline:none;padding:0 24px 0 8px;appearance:none;-webkit-appearance:none;color-scheme:light;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='none' stroke='%235E5E4A' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 7px center;
 }
 .text-color-control{
   width:28px;height:24px;padding:2px;border:1px solid rgba(20,20,22,.12);
@@ -1167,6 +1184,17 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .layer-btn.danger:hover{background:rgba(239,68,68,.10);color:#ef4444;}
 .layer-sep{width:1px;height:18px;background:rgba(0,0,0,.10);margin:0 3px;flex-shrink:0;}
 [data-theme="dark"] .layer-sep{background:rgba(255,255,255,.10);}
+.sticky-layer-colors{
+  display:flex;align-items:center;gap:4px;margin-left:3px;padding-left:6px;
+  border-left:1px solid rgba(0,0,0,.10);
+}
+.sticky-layer-swatch{
+  width:20px;height:20px;border-radius:999px;border:2px solid transparent;
+  box-shadow:0 0 0 1px rgba(0,0,0,.13) inset;background:#fff;cursor:pointer;
+}
+.sticky-layer-swatch.active{
+  border-color:#4262FF;box-shadow:0 0 0 2px #fff inset,0 0 0 1px rgba(0,0,0,.08) inset;
+}
 
 /* ── IMAGE ── */
 .card-image .card-body{padding:0;display:flex;flex-direction:column;overflow:hidden;}
@@ -2220,7 +2248,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 <link rel="stylesheet" href="styles/mobile-unified.css?v=20260525-mobile45">
 <link rel="stylesheet" href="styles/harmony.css">
 <link rel="stylesheet" href="styles/mobile-guard.css?v=20260525-mobile45">
-<link rel="stylesheet" href="styles/unify.css">
+<link rel="stylesheet" href="styles/unify.css?v=20260525-board46">
 </head>
 <body class="board-page">
 
@@ -3837,6 +3865,7 @@ function renderSticky(el, card) {
     const dot = document.createElement('div');
     dot.className = 'color-dot' + (c === stickyColor ? ' active' : '');
     dot.style.background = c;
+    dot.dataset.color = c;
     dot.title = 'Change sticky color';
     dot.addEventListener('click', e => {
       e.stopPropagation();
@@ -3945,6 +3974,11 @@ function renderText(el, card) {
     <input class="text-color-control" type="color" data-act="bg-color" title="Background color" value="${cssColorToHex(card.data.bgColor || '#ffffff')}">
     <button class="text-bg-clear" title="Transparent background">⊘</button>
     <button class="text-lock-btn${card.data.locked?' active':''}" title="Lock position">${card.data.locked?'🔒':'📌'}</button>`;
+  toolbar.querySelector('.text-format-select')?.style.setProperty('background', '#ffffff', 'important');
+  toolbar.querySelector('.text-format-select')?.style.setProperty('background-color', '#ffffff', 'important');
+  toolbar.querySelector('.text-format-select')?.style.setProperty('color', '#1c1c1e', 'important');
+  toolbar.addEventListener('mousedown', e => e.stopPropagation());
+  toolbar.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 
   const editor = document.createElement('div');
   editor.className = 'text-rich-editor';
@@ -5887,6 +5921,41 @@ function showLayerPopover(cardId) {
     colorRow.remove();
   }
 
+  let stickyRow = pop.querySelector('.sticky-layer-colors');
+  if (card?.type === 'sticky') {
+    if (!stickyRow) {
+      stickyRow = document.createElement('div');
+      stickyRow.className = 'sticky-layer-colors';
+      pop.appendChild(stickyRow);
+    }
+    stickyRow.innerHTML = '';
+    STICKY_COLORS.forEach(c => {
+      const sw = document.createElement('button');
+      sw.type = 'button';
+      sw.className = 'sticky-layer-swatch' + (c === (card.color || STICKY_COLORS[0]) ? ' active' : '');
+      sw.title = 'Sticky color';
+      sw.style.background = c;
+      sw.addEventListener('click', e => {
+        e.stopPropagation();
+        snapshot();
+        card.color = c;
+        const el = getCardEl(cardId);
+        if (el) {
+          el.style.setProperty('--sticky-color', c);
+          el.style.backgroundColor = c;
+          el.querySelectorAll('.color-dot').forEach(d => d.classList.toggle('active', d.dataset.color === c));
+        }
+        stickyRow.querySelectorAll('.sticky-layer-swatch').forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+        scheduleSave && scheduleSave();
+        saveLocal && saveLocal();
+      });
+      stickyRow.appendChild(sw);
+    });
+  } else if (stickyRow) {
+    stickyRow.remove();
+  }
+
   pop.classList.add('show');
   positionLayerPopover();
 }
@@ -6556,7 +6625,11 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key === 'a') { e.preventDefault(); state.cards.forEach(c => selectCard(c.id)); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'c' && !e.shiftKey) { e.preventDefault(); copySelectedCards(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'v' && !e.shiftKey) { e.preventDefault(); pasteCards(); return; }
+  if ((e.ctrlKey||e.metaKey) && e.key === 'v' && !e.shiftKey) {
+    // Let the paste event inspect clipboard items first; it can decide between
+    // image paste and internal card paste.
+    return;
+  }
   if ((e.ctrlKey||e.metaKey) && e.key === '0') { state.scale=1; state.pan={x:100,y:60}; applyTransform(); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'f') { e.preventDefault(); toggleBoardSearch(); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'h') { e.preventDefault(); openVersionHistory(); return; }
@@ -10695,13 +10768,51 @@ async function loadImageFile(file) {
   }
 }
 
+function addImageCardFromSource(src, title='Image', pos=null) {
+  if (!src) return false;
+  const target = resolveBoardPlacement(pos || pendingImagePos);
+  addCard('image', target.x, target.y, { title, src }, 320, 240);
+  pendingImagePos = null;
+  scheduleSave && scheduleSave();
+  saveLocal && saveLocal();
+  toast && toast('🖼 Image pasted');
+  return true;
+}
+
+function imageSourceFromClipboardHtml(html) {
+  if (!html) return '';
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const img = doc.querySelector('img[src]');
+    return img ? img.getAttribute('src') || '' : '';
+  } catch {
+    const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    return m ? m[1] : '';
+  }
+}
+
+function isLikelyImageSource(src) {
+  const value = String(src || '').trim();
+  if (!value) return false;
+  if (/^data:image\//i.test(value)) return true;
+  if (/^blob:/i.test(value)) return true;
+  if (!/^https?:\/\//i.test(value)) return false;
+  return /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(value) ||
+    /[?&](format|fm|mime)=?(png|jpe?g|webp|gif)/i.test(value) ||
+    /(images|img|media|photo|picture|upload|cdn)/i.test(value);
+}
+
 /* Global paste handler — add image directly to the board on Ctrl/⌘+V */
 document.addEventListener('paste', e => {
   // Don't hijack pasting inside inputs / editable fields
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
+  const data = e.clipboardData;
+  if (!data) {
+    if (_cardClipboard.length) { e.preventDefault(); pasteCards(); }
+    return;
+  }
+  const items = data.items || [];
   for (const item of items) {
     if (item.type && item.type.startsWith('image/')) {
       const file = item.getAsFile();
@@ -10728,6 +10839,25 @@ document.addEventListener('paste', e => {
       })();
       return;
     }
+  }
+
+  const htmlSrc = imageSourceFromClipboardHtml(data.getData('text/html'));
+  if (isLikelyImageSource(htmlSrc)) {
+    e.preventDefault();
+    addImageCardFromSource(htmlSrc, 'Pasted image');
+    return;
+  }
+
+  const plain = (data.getData('text/plain') || '').trim();
+  if (isLikelyImageSource(plain)) {
+    e.preventDefault();
+    addImageCardFromSource(plain, 'Pasted image');
+    return;
+  }
+
+  if (_cardClipboard.length) {
+    e.preventDefault();
+    pasteCards();
   }
 });
 
