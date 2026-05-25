@@ -1012,6 +1012,16 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   cursor:text;user-select:text;-webkit-user-select:text;
   caret-color:#111827;
 }
+.card-sticky:not(.sticky-editing) .sticky-textarea{
+  pointer-events:none;
+  cursor:move;
+}
+.card-sticky.sticky-editing .sticky-textarea{
+  pointer-events:auto;
+}
+.card-sticky.sticky-editing{
+  box-shadow:0 0 0 2px #4262FF,0 18px 36px rgba(12,12,24,.20)!important;
+}
 .card-sticky .sticky-textarea::placeholder{
   color:rgba(23,32,51,.42);font-weight:650;
 }
@@ -1033,6 +1043,13 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   box-shadow:0 4px 16px rgba(5,5,23,.12),0 1px 3px rgba(0,0,0,.06);
   opacity:0;transition:opacity .15s,transform .15s;pointer-events:none;
   z-index:30;align-items:center;flex-wrap:nowrap;max-width:none;
+}
+@media (max-width:860px){
+  .sticky-toolbar{
+    max-width:calc(100vw - 24px);overflow-x:auto;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .sticky-toolbar::-webkit-scrollbar{display:none;}
 }
 .card-sticky:hover .sticky-toolbar,
 .card-sticky.selected .sticky-toolbar{
@@ -3820,6 +3837,7 @@ function renderSticky(el, card) {
     const dot = document.createElement('div');
     dot.className = 'color-dot' + (c === stickyColor ? ' active' : '');
     dot.style.background = c;
+    dot.title = 'Change sticky color';
     dot.addEventListener('click', e => {
       e.stopPropagation();
       snapshot();
@@ -3843,6 +3861,7 @@ function renderSticky(el, card) {
   ta.value = card.data.text || '';
   ta.placeholder = 'Type';
   ta.setAttribute('aria-label', 'Sticky note text');
+  ta.setAttribute('spellcheck', 'true');
   const fit = () => fitStickyText(ta, card);
   ta.addEventListener('input', () => {
     card.data.text = ta.value;
@@ -3852,15 +3871,40 @@ function renderSticky(el, card) {
   });
   ta.addEventListener('mousedown', e => e.stopPropagation());
   ta.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
-  ta.addEventListener('keydown', e => e.stopPropagation());
+  ta.addEventListener('focus', () => el.classList.add('sticky-editing'));
+  ta.addEventListener('blur', () => el.classList.remove('sticky-editing'));
+  ta.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      ta.blur();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      ta.blur();
+    }
+  });
   body.appendChild(ta);
   el.appendChild(body);
   requestAnimationFrame(fit);
   el.addEventListener('dblclick', e => {
     if (e.target.closest('.sticky-toolbar,.sticky-close,.color-dot')) return;
-    ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length);
+    editStickyText(el, ta);
   });
+}
+
+function editStickyText(el, ta) {
+  el.classList.add('sticky-editing');
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+function focusStickyCard(cardId) {
+  setTimeout(() => {
+    const el = getCardEl(cardId);
+    const ta = el?.querySelector('.sticky-textarea');
+    if (el && ta) editStickyText(el, ta);
+  }, 40);
 }
 
 function fitStickyText(ta, card) {
@@ -7115,7 +7159,8 @@ document.addEventListener('click', () => {
 
 document.getElementById('ctx-sticky').addEventListener('click', () => {
   const def = getDefaults('sticky');
-  addCard('sticky', ctxPos.x - def.w/2, ctxPos.y - def.h/2, { text:'', color:STICKY_COLORS[0] });
+  const card = addCard('sticky', ctxPos.x - def.w/2, ctxPos.y - def.h/2, { text:'', color:STICKY_COLORS[0] });
+  if (card) focusStickyCard(card.id);
 });
 document.getElementById('ctx-text').addEventListener('click', () =>
   addCard('text', ctxPos.x-100, ctxPos.y-45, defaultTextData({ text:'Text' })));
@@ -7567,7 +7612,8 @@ function renderNotesTab(sec) {
       const r = boardWrap.getBoundingClientRect();
       const bp = screenToBoard(r.left+r.width/2+(Math.random()-.5)*120, r.top+r.height/2+(Math.random()-.5)*80);
       const def = getDefaults('sticky');
-      addCard('sticky', bp.x - def.w/2, bp.y - def.h/2, { text:'', color:c });
+      const card = addCard('sticky', bp.x - def.w/2, bp.y - def.h/2, { text:'', color:c });
+      if (card) focusStickyCard(card.id);
     });
     sec.appendChild(el);
   });
@@ -9941,7 +9987,10 @@ function quickAddCard(type, bx, by) {
   const def = getDefaults(type);
   const x = pos.x - def.w/2, y = pos.y - def.h/2;
   let card;
-  if (type === 'sticky')     card = addCard('sticky',   x, y, { text:'', color:STICKY_COLORS[0] });
+  if (type === 'sticky') {
+    card = addCard('sticky', x, y, { text:'', color:STICKY_COLORS[0] });
+    if (card) focusStickyCard(card.id);
+  }
   else if (type === 'text')  card = addCard('text',     x, y, defaultTextData({ text:'Label' }));
   else if (type === 'lesson') {
     card = addCard('lesson', x, y, { title:'New Lesson', status:'available', level:'B1', skill:'Grammar', duration:'45 min', desc:'', objectives:[], attachments:[], notes:'' });
