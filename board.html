@@ -2450,7 +2450,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3z"/></svg>
   </button>
   <!-- 9. Frame -->
-  <button class="mt-btn" id="mt-frame" data-tip="Frame (Shift+F)" onclick="setMiroTool('frame');quickAddFrame()">
+  <button class="mt-btn" id="mt-frame" data-tip="Frame (Shift+F)" onclick="toolbarQuickAdd('frame')">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6h12M5 3v10"/></svg>
   </button>
   <!-- 10. Sticker / Emoji -->
@@ -4240,9 +4240,9 @@ function renderTable(el, card) {
   el.appendChild(wrap);
 }
 
-function quickAddFrame() {
+function quickAddFrame(centerPos) {
   const r = boardWrap.getBoundingClientRect();
-  const pos = screenToBoard(r.left + r.width/2, r.top + r.height/2) || { x: 100, y: 100 };
+  const pos = centerPos || screenToBoard(r.left + r.width/2, r.top + r.height/2) || { x: 100, y: 100 };
   const def = getDefaults('frame');
   const n = (state.cards.filter(c => c.type === 'frame').length) + 1;
   const newCard = addCard('frame', pos.x - def.w/2, pos.y - def.h/2, {
@@ -4256,6 +4256,7 @@ function quickAddFrame() {
   if (newCard) { newCard.z = 0; applyCardLayer && applyCardLayer(newCard); }
   setMiroTool('select');
   scheduleSave && scheduleSave(); saveLocal && saveLocal();
+  return newCard;
 }
 
 /* ─── Miro-style frame containment ─── */
@@ -5952,6 +5953,12 @@ boardWrap.addEventListener('mousedown', e => {
   e.preventDefault();
 });
 
+boardWrap.addEventListener('click', e => {
+  if (!_pendingPlace) return;
+  e.preventDefault(); e.stopPropagation();
+  _doPlace(e.clientX, e.clientY);
+}, true);
+
 // Miro-style: double-click empty canvas → spawn a text card at cursor
 boardWrap.addEventListener('dblclick', e => {
   const onBg = e.target === boardWrap || e.target === board || e.target === emptyState;
@@ -6665,10 +6672,10 @@ function setMode(mode) {
   state.mode = mode;
   const btn = document.getElementById('btn-connect');
   if (mode === 'connect') {
-    btn.classList.add('active');
+    btn?.classList.add('active');
     boardWrap.classList.add('connecting');
   } else {
-    btn.classList.remove('active');
+    btn?.classList.remove('active');
     boardWrap.classList.remove('connecting');
     board.querySelectorAll('.board-card').forEach(el => el.classList.remove('anchors-visible'));
   }
@@ -9816,6 +9823,8 @@ function quickAddCard(type, bx, by) {
     pendingImagePos = pos;
     openImageModal();
     return;
+  } else if (type === 'frame') {
+    card = quickAddFrame(pos);
   } else if (type === 'shape') {
     card = addCard('shape', x, y, { shape:'rect', fill:'#ffffff', stroke:'#1C1C1E', sw:2, text:'', textColor:'#1C1C1E', fontSize:14 });
   } else if (type === 'mindmap') {
@@ -11255,6 +11264,13 @@ function _drawPointFromEvent(e) {
   return { x: (e.clientX - r.left - panX) / sc, y: (e.clientY - r.top - panY) / sc };
 }
 
+function _pointToSegmentDistance(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  if (dx === 0 && dy === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
 function _eraseAt(e) {
   if (!_drawSvg) return;
   const p = _drawPointFromEvent(e);
@@ -11271,8 +11287,11 @@ function _eraseAt(e) {
       if (pt.x > maxX) maxX = pt.x; if (pt.y > maxY) maxY = pt.y;
     }
     if (p.x >= minX - r && p.x <= maxX + r && p.y >= minY - r && p.y <= maxY + r) {
-      for (const pt of s.points) {
-        if (Math.hypot(pt.x - p.x, pt.y - p.y) <= r) { hit = true; break; }
+      for (let i = 0; i < s.points.length; i++) {
+        const pt = s.points[i];
+        const next = s.points[i + 1];
+        const dist = next ? _pointToSegmentDistance(p, pt, next) : Math.hypot(pt.x - p.x, pt.y - p.y);
+        if (dist <= r) { hit = true; break; }
       }
     }
     if (hit) { changed = true; } else { remaining.push(s); }
@@ -11303,6 +11322,9 @@ function _beginDraw(e) {
   if (!_canStartDraw(e)) return;
   _drawing = true;
   _drawPointerId = e.pointerId ?? null;
+  if (_drawPointerId != null && boardWrap.setPointerCapture) {
+    try { boardWrap.setPointerCapture(_drawPointerId); } catch {}
+  }
   _updateDrawCursor(e);
   if (_drawTool === 'eraser') {
     if (typeof snapshot === 'function') snapshot();
@@ -11349,6 +11371,9 @@ function _moveDraw(e) {
 function _endDraw(e) {
   if (_drawPointerId != null && e && e.pointerId != null && e.pointerId !== _drawPointerId) return;
   if (!_drawing) return;
+  if (_drawPointerId != null && boardWrap.releasePointerCapture) {
+    try { boardWrap.releasePointerCapture(_drawPointerId); } catch {}
+  }
   _drawing = false;
   _drawPointerId = null;
   const wasErasing = (_drawTool === 'eraser');
@@ -11410,7 +11435,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'p' || e.key === 'P') { e.preventDefault(); toggleDrawTool('pen'); }
   else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleDrawTool('marker'); }
   else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); toggleDrawTool('eraser'); }
-  else if (e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); quickAddFrame(); }
+  else if (e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); toolbarQuickAdd('frame'); }
   else if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); const btn=document.getElementById('mt-shape'); if(btn) openShapePanel({stopPropagation:()=>{},target:btn}); }
   else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); toolbarQuickAdd('mindmap'); }
   // Tab on selected mindmap node → create child node
