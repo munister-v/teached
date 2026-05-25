@@ -975,38 +975,59 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .radius-btn:hover{border-color:var(--border-2);}
 .radius-btn.active{border-color:var(--accent);background:var(--accent-2);color:var(--accent);}
 
-/* ── STICKY ── */
-.card-sticky .card-body{padding:8px 10px 10px;display:flex;flex-direction:column;}
-.card-sticky textarea{
-  flex:1;border:none;outline:none;resize:none;background:transparent;
-  font-family:var(--font);font-size:13px;font-weight:600;color:rgba(0,0,0,.72);
-  line-height:1.55;cursor:text;user-select:text;
-}
 /* ── STICKY NOTES — Miro style (no header, pure color block) ── */
 .card-sticky{
-  border-radius:4px!important;
+  --sticky-ink:#172033;
+  background:var(--sticky-color,#FFE566)!important;
+  border:0!important;border-radius:2px!important;
   min-width:120px!important;min-height:120px!important;
   cursor:move;
-  box-shadow:0 4px 12px rgba(0,0,0,.12),0 1px 3px rgba(0,0,0,.08)!important;
+  overflow:visible!important;
+  box-shadow:0 10px 22px rgba(12,12,24,.14),0 2px 4px rgba(12,12,24,.10)!important;
+  transition:box-shadow .15s ease, transform .15s ease;
+}
+.card-sticky::after{
+  content:"";position:absolute;left:10px;right:10px;bottom:-8px;height:12px;
+  background:radial-gradient(ellipse at center,rgba(12,12,24,.16),transparent 70%);
+  filter:blur(4px);opacity:.65;pointer-events:none;z-index:-1;
+}
+.card-sticky:hover:not(.dragging){
+  box-shadow:0 14px 30px rgba(12,12,24,.18),0 2px 6px rgba(12,12,24,.12)!important;
+}
+.card-sticky.selected{
+  box-shadow:0 0 0 2px #4262FF,0 14px 30px rgba(12,12,24,.18)!important;
 }
 .card-sticky .card-header{display:none!important;}
 .card-sticky .sticky-body{
-  flex:1!important;padding:14px 14px 10px!important;
-  display:flex!important;flex-direction:column!important;
+  width:100%;height:100%;padding:0!important;background:transparent!important;
+  display:flex!important;align-items:stretch!important;justify-content:stretch!important;
 }
-.card-sticky .sticky-text{
-  flex:1;font-size:14px;line-height:1.5;font-weight:400;
-  color:#050038;word-break:break-word;
+.card-sticky .sticky-textarea{
+  width:100%;height:100%;box-sizing:border-box;
+  border:0!important;outline:0!important;resize:none!important;background:transparent!important;
+  padding:26px 18px 20px!important;overflow:hidden;
+  font-family:"Comic Neue","Trebuchet MS",var(--font),sans-serif;
+  font-size:22px;line-height:1.16;font-weight:700;letter-spacing:-.02em;
+  color:var(--sticky-ink);text-align:center;
+  cursor:text;user-select:text;-webkit-user-select:text;
+  caret-color:#111827;
+}
+.card-sticky .sticky-textarea::placeholder{
+  color:rgba(23,32,51,.42);font-weight:650;
+}
+.card-sticky .sticky-textarea:focus::placeholder{color:rgba(23,32,51,.25);}
+@media (max-width:860px){
+  .card-sticky .sticky-textarea{font-size:20px;padding:22px 16px 18px!important;}
 }
 /* delete icon on hover only */
 .card-sticky .sticky-close{
   position:absolute!important;top:6px!important;right:6px!important;
-  opacity:0;transition:opacity .15s;
+  opacity:0;transition:opacity .15s,background .1s,color .1s;
 }
 .card-sticky:hover .sticky-close,.card-sticky.selected .sticky-close{opacity:1;}
 /* Sticky floating toolbar — Miro-style popover above sticky */
 .sticky-toolbar{
-  position:absolute;left:50%;top:-44px;transform:translateX(-50%);
+  position:absolute;left:50%;top:-46px;transform:translateX(-50%) translateY(4px);
   display:flex;gap:3px;padding:5px 7px;border-radius:8px;
   background:#fff;border:1px solid rgba(0,0,0,.10);
   box-shadow:0 4px 16px rgba(5,5,23,.12),0 1px 3px rgba(0,0,0,.06);
@@ -1018,8 +1039,8 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   opacity:1;pointer-events:all;transform:translateX(-50%) translateY(0);
 }
 .sticky-close{
-  width:22px;height:22px;border-radius:5px;border:none;cursor:pointer;
-  background:transparent;color:#9999AA;font-size:14px;line-height:1;
+  width:24px;height:24px;border-radius:6px;border:none;cursor:pointer;
+  background:rgba(255,255,255,.38);color:rgba(23,32,51,.50);font-size:15px;line-height:1;
   display:flex;align-items:center;justify-content:center;margin-left:4px;
   transition:background .1s,color .1s;
 }
@@ -3551,7 +3572,7 @@ function toast(msg) {
 
 /* ════════════════════════ CARD DEFAULTS ════════════════════════ */
 function getDefaults(type) {
-  return ({ sticky:{w:220,h:180}, plan:{w:280,h:200}, student:{w:240,h:160},
+  return ({ sticky:{w:180,h:180}, plan:{w:280,h:200}, student:{w:240,h:160},
             event:{w:200,h:140},  note:{w:300,h:240}, text:{w:180,h:80},
             image:{w:280,h:220},  game:{w:340,h:300},
             lesson:{w:260,h:210}, assignment:{w:240,h:200}, milestone:{w:210,h:220},
@@ -3787,22 +3808,27 @@ function _cardVisible(card) {
 }
 
 function renderSticky(el, card) {
-  el.style.backgroundColor = card.color || STICKY_COLORS[0];
+  const stickyColor = card.color || STICKY_COLORS[0];
+  el.style.setProperty('--sticky-color', stickyColor);
+  el.style.backgroundColor = stickyColor;
   const body = document.createElement('div');
-  body.className = 'card-body';
+  body.className = 'card-body sticky-body';
 
   const tb = document.createElement('div');
   tb.className = 'sticky-toolbar';
   STICKY_COLORS.forEach(c => {
     const dot = document.createElement('div');
-    dot.className = 'color-dot' + (c === card.color ? ' active' : '');
+    dot.className = 'color-dot' + (c === stickyColor ? ' active' : '');
     dot.style.background = c;
     dot.addEventListener('click', e => {
       e.stopPropagation();
       snapshot();
-      card.color = c; el.style.backgroundColor = c;
+      card.color = c;
+      el.style.setProperty('--sticky-color', c);
+      el.style.backgroundColor = c;
       el.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
       dot.classList.add('active');
+      scheduleSave();
     });
     tb.appendChild(dot);
   });
@@ -3813,12 +3839,40 @@ function renderSticky(el, card) {
   body.appendChild(tb);
 
   const ta = document.createElement('textarea');
+  ta.className = 'sticky-textarea';
   ta.value = card.data.text || '';
-  ta.placeholder = 'Write something…';
-  ta.addEventListener('input', () => { card.data.text = ta.value; scheduleSave(); });
+  ta.placeholder = 'Type';
+  ta.setAttribute('aria-label', 'Sticky note text');
+  const fit = () => fitStickyText(ta, card);
+  ta.addEventListener('input', () => {
+    card.data.text = ta.value;
+    card.data.content = ta.value;
+    fit();
+    scheduleSave();
+  });
   ta.addEventListener('mousedown', e => e.stopPropagation());
+  ta.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+  ta.addEventListener('keydown', e => e.stopPropagation());
   body.appendChild(ta);
   el.appendChild(body);
+  requestAnimationFrame(fit);
+  el.addEventListener('dblclick', e => {
+    if (e.target.closest('.sticky-toolbar,.sticky-close,.color-dot')) return;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  });
+}
+
+function fitStickyText(ta, card) {
+  const value = (ta.value || '').trim();
+  const area = Math.max(1, Number(card.w || ta.clientWidth) * Number(card.h || ta.clientHeight));
+  const density = value.length / Math.sqrt(area);
+  let size = 22;
+  if (value.length > 220 || density > 16) size = 12;
+  else if (value.length > 150 || density > 11) size = 14;
+  else if (value.length > 95 || density > 7.5) size = 16;
+  else if (value.length > 48 || density > 4.7) size = 19;
+  ta.style.fontSize = size + 'px';
 }
 
 function renderText(el, card) {
@@ -6090,7 +6144,7 @@ document.addEventListener('mousemove', e => {
   if (isResizing) {
     const { card, el, dir, sw, sh, sx, sy, mx, my } = resizeStart;
     const minSizes = {
-      sticky:{w:160,h:120}, text:{w:120,h:50}, plan:{w:200,h:140},
+      sticky:{w:120,h:120}, text:{w:120,h:50}, plan:{w:200,h:140},
       lesson:{w:200,h:160}, assignment:{w:200,h:160}, milestone:{w:160,h:160},
       vocab:{w:180,h:160}, checklist:{w:180,h:120}, timer:{w:140,h:100},
       game:{w:200,h:160}, video:{w:240,h:160}, image:{w:160,h:120}, student:{w:180,h:120},
@@ -6137,6 +6191,10 @@ document.addEventListener('mousemove', e => {
     card.w = nw; card.h = nh; card.x = nx; card.y = ny;
     el.style.width = nw + 'px';
     el.style.height = nh + 'px';
+    if (card.type === 'sticky') {
+      const stickyText = el.querySelector('.sticky-textarea');
+      if (stickyText) fitStickyText(stickyText, card);
+    }
     if (hasN || hasW) updateCardPos(card);
     if (card.type === 'game') applyGameScale(el, card);
     _scheduleArrows(); _scheduleMinimap(); return;
@@ -7055,8 +7113,10 @@ document.addEventListener('click', () => {
   if (typeof _syncMobileSheetBackdrop === 'function') _syncMobileSheetBackdrop();
 });
 
-document.getElementById('ctx-sticky').addEventListener('click', () =>
-  addCard('sticky', ctxPos.x-110, ctxPos.y-90, { text:'', color:STICKY_COLORS[0] }));
+document.getElementById('ctx-sticky').addEventListener('click', () => {
+  const def = getDefaults('sticky');
+  addCard('sticky', ctxPos.x - def.w/2, ctxPos.y - def.h/2, { text:'', color:STICKY_COLORS[0] });
+});
 document.getElementById('ctx-text').addEventListener('click', () =>
   addCard('text', ctxPos.x-100, ctxPos.y-45, defaultTextData({ text:'Text' })));
 document.getElementById('ctx-shape').addEventListener('click', () =>
@@ -7506,7 +7566,8 @@ function renderNotesTab(sec) {
       if (isSidebarDrag) return;
       const r = boardWrap.getBoundingClientRect();
       const bp = screenToBoard(r.left+r.width/2+(Math.random()-.5)*120, r.top+r.height/2+(Math.random()-.5)*80);
-      addCard('sticky', bp.x-110, bp.y-90, { text:'', color:c });
+      const def = getDefaults('sticky');
+      addCard('sticky', bp.x - def.w/2, bp.y - def.h/2, { text:'', color:c });
     });
     sec.appendChild(el);
   });
