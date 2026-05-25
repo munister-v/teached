@@ -3546,7 +3546,7 @@ function getDefaults(type) {
 
 function getCardZ(card) {
   const z = Number(card?.z);
-  return Number.isFinite(z) && z > 0 ? z : 1;
+  return Number.isFinite(z) && z >= 0 ? z : 1;
 }
 
 function nextCardZ() {
@@ -3554,7 +3554,7 @@ function nextCardZ() {
 }
 
 function normalizeCardLayer(card, fallbackZ) {
-  if (!Number.isFinite(Number(card.z)) || Number(card.z) <= 0) card.z = fallbackZ || 1;
+  if (!Number.isFinite(Number(card.z)) || Number(card.z) < 0) card.z = fallbackZ || 1;
   return card;
 }
 
@@ -5930,6 +5930,7 @@ boardWrap.addEventListener('mousedown', e => {
 
   // Placement mode (Miro-style): left-click places element exactly where clicked
   if (e.button === 0 && _pendingPlace) {
+    if (_isPlacementBlockedTarget(e.target)) return;
     e.preventDefault(); e.stopPropagation();
     _doPlace(e.clientX, e.clientY);
     return;
@@ -5955,6 +5956,7 @@ boardWrap.addEventListener('mousedown', e => {
 
 boardWrap.addEventListener('click', e => {
   if (!_pendingPlace) return;
+  if (_isPlacementBlockedTarget(e.target)) return;
   e.preventDefault(); e.stopPropagation();
   _doPlace(e.clientX, e.clientY);
 }, true);
@@ -6273,6 +6275,7 @@ document.addEventListener('mouseup', e => {
   boardWrap.addEventListener('touchstart', e => {
     // Placement mode: touch places element exactly where tapped
     if (_pendingPlace && e.touches.length === 1) {
+      if (_isPlacementBlockedTarget(e.target)) return;
       e.preventDefault();
       _doPlace(e.touches[0].clientX, e.touches[0].clientY);
       return;
@@ -9666,6 +9669,9 @@ const _PLACE_INFO = {
   checklist: { icon:'✅', label:'Checklist' },
   timer:     { icon:'⏱', label:'Timer' },
   lesson:    { icon:'📋', label:'Lesson' },
+  assignment:{ icon:'📝', label:'Assignment' },
+  vocab:     { icon:'📖', label:'Vocabulary' },
+  frame:     { icon:'▣',  label:'Frame' },
   image:     { icon:'🖼', label:'Image' },
   video:     { icon:'▶',  label:'Video' },
 };
@@ -9697,6 +9703,51 @@ function cancelPlaceMode() {
   if (_placeGhost) { _placeGhost.remove(); _placeGhost = null; }
 }
 
+function _isPlacementBlockedTarget(target) {
+  if (!target) return false;
+  return !!target.closest([
+    '.layer-popover',
+    '.text-format-toolbar',
+    '.resize-handle',
+    '.anchor-dot',
+    '#minimap',
+    '#zoom-controls',
+    '#quick-add',
+    '#draw-palette',
+    '#align-bar',
+    '#card-editor',
+    '#sticker-overlay',
+    '#image-overlay',
+    '#video-overlay',
+    '#games-overlay',
+    '#student-quiz-overlay'
+  ].join(','));
+}
+
+function _focusPlacedCard(card, type) {
+  if (!card) return;
+  clearSelection();
+  selectCard(card.id);
+  if (type !== 'text' && type !== 'sticky') return;
+  setTimeout(() => {
+    const el = getCardEl(card.id);
+    const editor = type === 'text'
+      ? el?.querySelector('.text-rich-editor')
+      : el?.querySelector('textarea');
+    if (!editor) return;
+    editor.focus();
+    if (typeof editor.select === 'function') {
+      editor.select();
+      return;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, 40);
+}
+
 function _doPlace(clientX, clientY) {
   if (!_pendingPlace) return false;
   const bp = screenToBoard(clientX, clientY);
@@ -9708,9 +9759,9 @@ function _doPlace(clientX, clientY) {
     const def = getDefaults('shape');
     const data = extraData || { shape:'rect', fill:'#ffffff', stroke:'#1C1C1E', sw:2, text:'', textColor:'#1C1C1E', fontSize:14 };
     const c = addCard('shape', bp.x - def.w/2, bp.y - def.h/2, data);
-    if (c) { state.selected = new Set([c.id]); getCardEl(c.id)?.classList.add('selected'); showLayerPopover(c.id); }
+    _focusPlacedCard(c, type);
   } else {
-    quickAddCard(type, bp.x, bp.y);
+    _focusPlacedCard(quickAddCard(type, bp.x, bp.y), type);
   }
   scheduleSave && scheduleSave(); saveLocal && saveLocal();
   return true;
@@ -9833,6 +9884,7 @@ function quickAddCard(type, bx, by) {
   } else if (type === 'table') {
     card = addCard('table', x, y, { title:'Table', rows:[['Header 1','Header 2','Header 3'],['','',''],['','','']] });
   }
+  return card;
 }
 
 /* ════════════════════════ VOCABULARY CARD ════════════════════════ */
