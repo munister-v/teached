@@ -2432,6 +2432,7 @@ const WM = (function () {
   // ── Drag + Resize handling ───────────────────────────────────
   let drag = null;   // { win, ox, oy, wx, wy, snapTo }
   let rez  = null;   // { win, dir, sx, sy, sw, sh, x0, y0 }
+  let moveRaf = 0, lastMove = null;
 
   function attachHandles(win) {
     if (win._wmAttached) return;
@@ -2484,7 +2485,7 @@ const WM = (function () {
     });
   }
 
-  document.addEventListener('mousemove', e => {
+  function handleWindowMove(e) {
     if (drag) {
       let nx = drag.wx + e.clientX - drag.ox;
       let ny = drag.wy + e.clientY - drag.oy;
@@ -2520,9 +2521,25 @@ const WM = (function () {
       rez.win.style.width  = nw + 'px';
       rez.win.style.height = nh + 'px';
     }
+  }
+
+  document.addEventListener('mousemove', e => {
+    if (!drag && !rez) return;
+    lastMove = { clientX: e.clientX, clientY: e.clientY };
+    if (moveRaf) return;
+    moveRaf = requestAnimationFrame(() => {
+      moveRaf = 0;
+      if (lastMove) handleWindowMove(lastMove);
+    });
   });
 
   document.addEventListener('mouseup', () => {
+    if (moveRaf) {
+      cancelAnimationFrame(moveRaf);
+      moveRaf = 0;
+      if (lastMove) handleWindowMove(lastMove);
+    }
+    lastMove = null;
     if (drag) {
       drag.win.classList.remove('dragging');
       if (drag.snapTo) {

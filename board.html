@@ -3328,15 +3328,34 @@ const minimapCtx = minimapCanvas.getContext('2d');
 
 /* ════════════════════════ TRANSFORM ════════════════════════ */
 
-/* ── RAF-guarded rendering helpers ── */
-let _arrowRaf = null, _minimapRaf = null;
+/* ── RAF/throttle guarded rendering helpers ── */
+let _arrowRaf = null, _minimapRaf = null, _minimapTimer = null, _layerPopoverRaf = null;
+let _lastMinimapPaint = 0;
 function _scheduleArrows() {
+  if (!state.arrows || !state.arrows.length) return;
   if (_arrowRaf) return;
   _arrowRaf = requestAnimationFrame(() => { _arrowRaf = null; renderAllArrows(); });
 }
-function _scheduleMinimap() {
-  if (_minimapRaf) return;
-  _minimapRaf = requestAnimationFrame(() => { _minimapRaf = null; renderMinimap(); });
+function _scheduleMinimap(force = false) {
+  if (_minimapRaf || _minimapTimer) return;
+  const run = () => {
+    _minimapTimer = null;
+    _minimapRaf = requestAnimationFrame(() => {
+      _minimapRaf = null;
+      _lastMinimapPaint = performance.now();
+      renderMinimap();
+    });
+  };
+  const wait = force ? 0 : Math.max(0, 90 - (performance.now() - _lastMinimapPaint));
+  if (wait) _minimapTimer = setTimeout(run, wait);
+  else run();
+}
+function _scheduleLayerPopover() {
+  if (_layerPopoverRaf) return;
+  _layerPopoverRaf = requestAnimationFrame(() => {
+    _layerPopoverRaf = null;
+    positionLayerPopover();
+  });
 }
 let _zcPct = null;
 let _isMomentum = false;
@@ -3348,7 +3367,7 @@ function applyTransform() {
   if (_zcPct) _zcPct.textContent = pct;
   _scheduleArrows();
   _scheduleMinimap();
-  positionLayerPopover();
+  _scheduleLayerPopover();
   if (!_isMomentum) wsSendViewport();
 }
 
@@ -6852,11 +6871,14 @@ function renderAllArrows() {
   // Remove existing rendered arrows
   arrowsSvg.querySelectorAll('.arrow-group').forEach(g => g.remove());
 
-  const r = boardWrap.getBoundingClientRect();
+  if (!state.arrows.length) return;
+
+  const cardById = new Map(state.cards.map(c => [c.id, c]));
+  const frag = document.createDocumentFragment();
 
   state.arrows.forEach(arrow => {
-    const fromCard = state.cards.find(c => c.id === arrow.fromCard);
-    const toCard   = state.cards.find(c => c.id === arrow.toCard);
+    const fromCard = cardById.get(arrow.fromCard);
+    const toCard   = cardById.get(arrow.toCard);
     if (!fromCard || !toCard) return;
 
     const from = getAnchorBoardPos(fromCard, arrow.fromAnchor);
@@ -6913,7 +6935,7 @@ function renderAllArrows() {
 
     // Style based on arrow type
     if (arrow.type === 'prereq') {
-      const fromCardData = state.cards.find(c => c.id === arrow.fromCard);
+      const fromCardData = cardById.get(arrow.fromCard);
       const isDone   = fromCardData?.data?.status === 'done';
       const isLocked = !fromCardData || fromCardData.data?.status === 'locked';
       path.classList.add('prereq');
@@ -6951,8 +6973,9 @@ function renderAllArrows() {
       g.appendChild(fo);
     }
 
-    arrowsSvg.appendChild(g);
+    frag.appendChild(g);
   });
+  arrowsSvg.appendChild(frag);
 }
 
 function removeArrowById(id, doSnapshot=true) {
@@ -7117,6 +7140,9 @@ function clearAll() {
 /* ════════════════════════ MINIMAP ════════════════════════ */
 let _minimapInited = false;
 function renderMinimap() {
+  if (!minimapCanvas || !minimapCtx) return;
+  const host = minimapCanvas.closest('#minimap');
+  if (host && host.offsetParent === null) return;
   const MW = 160, MH = 110;
   if (!_minimapInited) {
     minimapCanvas.width = MW * devicePixelRatio;
