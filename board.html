@@ -6973,10 +6973,17 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key === 's') { e.preventDefault(); forceSave(); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'a') { e.preventDefault(); state.cards.forEach(c => selectCard(c.id)); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'c' && !e.shiftKey) { e.preventDefault(); copySelectedCards(); return; }
+  if ((e.ctrlKey||e.metaKey) && e.key === 'c' && !e.shiftKey) {
+    if (state.selected.size) {
+      e.preventDefault();
+      copySelectedCards();
+    }
+    return;
+  }
   if ((e.ctrlKey||e.metaKey) && e.key === 'v' && !e.shiftKey) {
     // Let the paste event inspect clipboard items first; it can decide between
     // image paste and internal card paste.
+    scheduleAsyncClipboardPasteFallback();
     return;
   }
   if ((e.ctrlKey||e.metaKey) && e.key === '0') { state.scale=1; state.pan={x:100,y:60}; applyTransform(); return; }
@@ -7087,6 +7094,8 @@ function cycleSelection(direction) {
 
 /* ════════════════════════ CLIPBOARD: COPY / PASTE CARDS ════════════════════════ */
 let _cardClipboard = [];
+let _lastPasteHandledAt = 0;
+let _asyncClipboardPasteInFlight = false;
 
 function copySelectedCards() {
   if (!state.selected.size) { toast && toast('Select cards first'); return; }
@@ -7096,6 +7105,11 @@ function copySelectedCards() {
     return { type: c.type, x: c.x, y: c.y, w: c.w, h: c.h, data: JSON.parse(JSON.stringify(c.data)), color: c.color };
   }).filter(Boolean);
   toast && toast('Copied ' + _cardClipboard.length + ' card' + (_cardClipboard.length > 1 ? 's' : ''));
+  const selectedId = state.selected.size === 1 ? [...state.selected][0] : null;
+  const selectedCard = selectedId ? state.cards.find(c => c.id === selectedId) : null;
+  if (selectedCard?.type === 'image' && selectedCard.data?.src) {
+    copyImageCardToSystemClipboard(selectedCard);
+  }
 }
 
 function pasteCards() {
@@ -11488,12 +11502,43 @@ function addImageCardFromSource(src, title='Image', pos=null) {
   return true;
 }
 
+async function addImageCardFromFile(file, title='Pasted image', pos=null) {
+  const prepared = await prepareBoardImageFile(file);
+  const target = resolveBoardPlacement(pos || pendingImagePos);
+  addCard('image', target.x, target.y, {
+    title,
+    src: prepared.dataUrl,
+    imageSize: prepared.bytes,
+    imageOptimized: prepared.optimized,
+  }, 320, 240);
+  pendingImagePos = null;
+  scheduleSave && scheduleSave();
+  saveLocal && saveLocal();
+  toast && toast('🖼 Image pasted');
+  return true;
+}
+
+async function addImageCardsFromFiles(files, pos=null) {
+  const imageFiles = Array.from(files || []).filter(file => file?.type?.startsWith('image/'));
+  if (!imageFiles.length) return false;
+  _lastPasteHandledAt = performance.now();
+  let offset = 0;
+  for (const file of imageFiles) {
+    const target = resolveBoardPlacement(pos || pendingImagePos);
+    await addImageCardFromFile(file, file.name || 'Pasted image', { x: target.x + offset, y: target.y + offset });
+    offset += 28;
+  }
+  return true;
+}
+
 function imageSourceFromClipboardHtml(html) {
   if (!html) return '';
   try {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const img = doc.querySelector('img[src]');
-    return img ? img.getAttribute('src') || '' : '';
+    if (img?.getAttribute('src')) return img.getAttribute('src') || '';
+    const srcset = doc.querySelector('img[srcset]')?.getAttribute('srcset') || '';
+    return srcset.split(',').map(part => part.trim().split(/\s+/)[0]).find(Boolean) || '';
   } catch {
     const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
     return m ? m[1] : '';
@@ -11511,6 +11556,80 @@ function isLikelyImageSource(src) {
     /(images|img|media|photo|picture|upload|cdn)/i.test(value);
 }
 
+async function srcToPngClipboardBlob(src) {
+  const response = await fetch(src);
+  const blob = await response.blob();
+  if (blob.type === 'image/png') return blob;
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Could not copy this image to clipboard.'));
+      image.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob(out => out ? resolve(out) : reject(new Error('Could not encode clipboard image.')), 'image/png');
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function copyImageCardToSystemClipboard(card) {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
+  try {
+    const blob = await srcToPngClipboardBlob(card.data.src);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    toast && toast('Image copied to clipboard');
+    return true;
+  } catch (err) {
+    // Keep the internal card copy even if the browser blocks system clipboard write.
+    console.warn('System image copy failed', err);
+    return false;
+  }
+}
+
+async function pasteFromAsyncClipboard() {
+  if (_asyncClipboardPasteInFlight || !navigator.clipboard?.read) return false;
+  _asyncClipboardPasteInFlight = true;
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find(type => type.startsWith('image/'));
+      if (!imageType) continue;
+      const blob = await item.getType(imageType);
+      const ext = imageType.split('/')[1] || 'png';
+      const file = new File([blob], `clipboard.${ext}`, { type: imageType });
+      await addImageCardFromFile(file, 'Pasted image');
+      _lastPasteHandledAt = performance.now();
+      return true;
+    }
+  } catch (err) {
+    // Browser may deny async clipboard reads; the regular paste event still covers most cases.
+    console.warn('Async clipboard image paste failed', err);
+  } finally {
+    _asyncClipboardPasteInFlight = false;
+  }
+  return false;
+}
+
+function scheduleAsyncClipboardPasteFallback() {
+  const startedAt = performance.now();
+  window.setTimeout(() => {
+    if (performance.now() - _lastPasteHandledAt < 250) return;
+    if (_lastPasteHandledAt >= startedAt) return;
+    pasteFromAsyncClipboard().then(ok => {
+      if (!ok && _cardClipboard.length) pasteCards();
+    });
+  }, 90);
+}
+
 /* Global paste handler — add image directly to the board on Ctrl/⌘+V */
 document.addEventListener('paste', e => {
   // Don't hijack pasting inside inputs / editable fields
@@ -11520,31 +11639,28 @@ document.addEventListener('paste', e => {
     if (_cardClipboard.length) { e.preventDefault(); pasteCards(); }
     return;
   }
+  const files = Array.from(data.files || []);
+  if (files.some(file => file?.type?.startsWith('image/'))) {
+    e.preventDefault();
+    _lastPasteHandledAt = performance.now();
+    addImageCardsFromFiles(files).catch(err => {
+      toast && toast(err.message);
+      alert(err.message);
+    });
+    return;
+  }
+
   const items = data.items || [];
   for (const item of items) {
     if (item.type && item.type.startsWith('image/')) {
       const file = item.getAsFile();
       if (!file) continue;
       e.preventDefault();
-      (async () => {
-        try {
-          const prepared = await prepareBoardImageFile(file);
-          const pos = resolveBoardPlacement(pendingImagePos);
-          addCard('image', pos.x, pos.y, {
-            title: 'Pasted image',
-            src: prepared.dataUrl,
-            imageSize: prepared.bytes,
-            imageOptimized: prepared.optimized,
-          }, 320, 240);
-          pendingImagePos = null;
-          scheduleSave && scheduleSave();
-          saveLocal && saveLocal();
-          toast && toast('🖼 Image pasted');
-        } catch (err) {
-          toast && toast(err.message);
-          alert(err.message);
-        }
-      })();
+      _lastPasteHandledAt = performance.now();
+      addImageCardFromFile(file, file.name || 'Pasted image').catch(err => {
+        toast && toast(err.message);
+        alert(err.message);
+      });
       return;
     }
   }
@@ -11552,6 +11668,7 @@ document.addEventListener('paste', e => {
   const htmlSrc = imageSourceFromClipboardHtml(data.getData('text/html'));
   if (isLikelyImageSource(htmlSrc)) {
     e.preventDefault();
+    _lastPasteHandledAt = performance.now();
     addImageCardFromSource(htmlSrc, 'Pasted image');
     return;
   }
@@ -11559,12 +11676,14 @@ document.addEventListener('paste', e => {
   const plain = (data.getData('text/plain') || '').trim();
   if (isLikelyImageSource(plain)) {
     e.preventDefault();
+    _lastPasteHandledAt = performance.now();
     addImageCardFromSource(plain, 'Pasted image');
     return;
   }
 
   if (_cardClipboard.length) {
     e.preventDefault();
+    _lastPasteHandledAt = performance.now();
     pasteCards();
   }
 });
