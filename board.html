@@ -6988,8 +6988,8 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ((e.ctrlKey||e.metaKey) && shortcutKey === 'v' && !e.shiftKey) {
-    // Let the paste event inspect clipboard items first; it can decide between
-    // image paste and internal card paste.
+    // Read immediately while the Cmd/Ctrl+V user activation is still alive.
+    pasteFromClipboardShortcut();
     focusBoardClipboardCatcher();
     scheduleAsyncClipboardPasteFallback();
     return;
@@ -11479,6 +11479,17 @@ function isMacClipboardTiff(type) {
   return /^(image\/tiff?|public\.tiff|com\.apple\.tiff)$/i.test(type || '');
 }
 
+function clipboardTypeToImageMime(type) {
+  const value = String(type || '').toLowerCase();
+  if (value.startsWith('image/')) return value;
+  if (value === 'public.png' || value === 'com.apple.png') return 'image/png';
+  if (value === 'public.jpeg' || value === 'public.jpg') return 'image/jpeg';
+  if (value === 'com.compuserve.gif' || value === 'public.gif') return 'image/gif';
+  if (value === 'org.webmproject.webp' || value === 'public.webp') return 'image/webp';
+  if (isMacClipboardTiff(value)) return 'image/tiff';
+  return '';
+}
+
 function isClipboardImageFile(file) {
   if (!file) return false;
   if (file.type?.startsWith('image/')) return true;
@@ -11719,18 +11730,31 @@ async function pasteFromAsyncClipboard() {
   try {
     const items = await navigator.clipboard.read();
     for (const item of items) {
-      const imageType = item.types.find(type => type.startsWith('image/') || isMacClipboardTiff(type));
+      const imageType = item.types.find(type => clipboardTypeToImageMime(type));
       if (!imageType) continue;
-      if (isMacClipboardTiff(imageType)) {
+      const mime = clipboardTypeToImageMime(imageType);
+      if (isMacClipboardTiff(mime)) {
         toast && toast('macOS gave TIFF. Try copying as PNG/JPG or drag the file.');
         return false;
       }
       const blob = await item.getType(imageType);
-      const ext = imageType.split('/')[1] || 'png';
-      const file = new File([blob], `clipboard.${ext}`, { type: imageType });
+      const ext = mime.split('/')[1] || 'png';
+      const file = new File([blob], `clipboard.${ext}`, { type: mime });
       await addImageCardFromFile(file, 'Pasted image');
       _lastPasteHandledAt = performance.now();
       return true;
+    }
+    for (const item of items) {
+      const textType = item.types.find(type => /^(text\/html|text\/plain|text\/uri-list|public\.url)$/i.test(type));
+      if (!textType) continue;
+      const blob = await item.getType(textType);
+      const text = (await blob.text()).trim();
+      const src = textType === 'text/html' ? imageSourceFromClipboardHtml(text) : text.split(/\r?\n/).map(s => s.trim()).find(s => s && !s.startsWith('#'));
+      if (isLikelyImageSource(src)) {
+        addImageCardFromSource(src, 'Pasted image');
+        _lastPasteHandledAt = performance.now();
+        return true;
+      }
     }
   } catch (err) {
     // Browser may deny async clipboard reads; the regular paste event still covers most cases.
@@ -11739,6 +11763,35 @@ async function pasteFromAsyncClipboard() {
     _asyncClipboardPasteInFlight = false;
   }
   return false;
+}
+
+async function pasteFromClipboardTextFallback() {
+  if (!navigator.clipboard?.readText) return false;
+  try {
+    const text = (await navigator.clipboard.readText()).trim();
+    if (isLikelyImageSource(text)) {
+      addImageCardFromSource(text, 'Pasted image');
+      _lastPasteHandledAt = performance.now();
+      return true;
+    }
+  } catch (err) {
+    console.warn('Clipboard text paste failed', err);
+  }
+  return false;
+}
+
+function pasteFromClipboardShortcut() {
+  const startedAt = performance.now();
+  pasteFromAsyncClipboard()
+    .then(ok => ok || pasteFromClipboardTextFallback())
+    .then(ok => {
+      if (ok) return;
+      if (performance.now() - _lastPasteHandledAt < 500 || _lastPasteHandledAt >= startedAt) return;
+      window.setTimeout(() => {
+        if (inspectBoardClipboardCatcherForImage()) return;
+        if (_cardClipboard.length && performance.now() - _lastPasteHandledAt > 500) pasteCards();
+      }, 120);
+    });
 }
 
 function scheduleAsyncClipboardPasteFallback() {
