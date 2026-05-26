@@ -7122,6 +7122,30 @@ function cleanupBoardClipboardCatcher() {
   }, 0);
 }
 
+function inspectBoardClipboardCatcherForImage() {
+  const catcher = document.getElementById('board-clipboard-catcher');
+  if (!catcher) return false;
+  const htmlSrc = imageSourceFromClipboardHtml(catcher.innerHTML || '');
+  if (isLikelyImageSource(htmlSrc)) {
+    addImageCardFromSource(htmlSrc, 'Pasted image');
+    cleanupBoardClipboardCatcher();
+    return true;
+  }
+  const plain = (catcher.textContent || '').trim();
+  if (isLikelyImageSource(plain)) {
+    addImageCardFromSource(plain, 'Pasted image');
+    cleanupBoardClipboardCatcher();
+    return true;
+  }
+  return false;
+}
+
+document.addEventListener('pointerdown', e => {
+  if (!boardWrap?.contains(e.target)) return;
+  if (isBoardTypingTarget(e.target)) return;
+  window.setTimeout(focusBoardClipboardCatcher, 0);
+}, true);
+
 function copySelectedCards() {
   if (!state.selected.size) { toast && toast('Select cards first'); return; }
   _cardClipboard = [...state.selected].map(id => {
@@ -11433,18 +11457,67 @@ function fileNameLooksLikeImage(file) {
   return /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|heif|tiff?)$/i.test(file?.name || '');
 }
 
+function mimeFromImageFileName(file) {
+  const ext = (file?.name || '').split('.').pop()?.toLowerCase();
+  return ({
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+    bmp: 'image/bmp',
+    avif: 'image/avif',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    tif: 'image/tiff',
+    tiff: 'image/tiff',
+  })[ext] || '';
+}
+
 function isMacClipboardTiff(type) {
-  return /^(image\/tiff?|public\.tiff)$/i.test(type || '');
+  return /^(image\/tiff?|public\.tiff|com\.apple\.tiff)$/i.test(type || '');
 }
 
 function isClipboardImageFile(file) {
   if (!file) return false;
   if (file.type?.startsWith('image/')) return true;
-  return fileNameLooksLikeImage(file);
+  return fileNameLooksLikeImage(file) || (!file.type && file.size > 0);
+}
+
+async function sniffImageMime(file) {
+  if (!file) return '';
+  if (isMacClipboardTiff(file.type)) return 'image/tiff';
+  if (file.type?.startsWith('image/')) return file.type;
+  const namedMime = mimeFromImageFileName(file);
+  if (namedMime) return namedMime;
+  const bytes = new Uint8Array(await file.slice(0, 512).arrayBuffer());
+  if (bytes.length >= 8 &&
+      bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+      bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) return 'image/png';
+  if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
+  const ascii = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+  if (ascii.startsWith('GIF87a') || ascii.startsWith('GIF89a')) return 'image/gif';
+  if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP') return 'image/webp';
+  if ((bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2A && bytes[3] === 0x00) ||
+      (bytes[0] === 0x4D && bytes[1] === 0x4D && bytes[2] === 0x00 && bytes[3] === 0x2A)) return 'image/tiff';
+  if (/^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(ascii)) return 'image/svg+xml';
+  return '';
+}
+
+async function normalizeClipboardImageFile(file) {
+  const mime = await sniffImageMime(file);
+  if (!mime || !mime.startsWith('image/')) throw new Error('Clipboard does not contain a readable image.');
+  if (isMacClipboardTiff(mime)) {
+    throw new Error('macOS copied this image as TIFF. Copy it as PNG/JPG, take a screenshot to clipboard, or drag the image file onto the board.');
+  }
+  if (file.type === mime && file.name) return file;
+  const ext = mime.split('/')[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+  return new File([file], file.name || `clipboard.${ext}`, { type: mime });
 }
 
 async function prepareBoardImageFile(file) {
-  if (!isClipboardImageFile(file)) {
+  if (!file || !file.type?.startsWith('image/')) {
     throw new Error('Please choose an image file.');
   }
   if (isMacClipboardTiff(file.type)) {
@@ -11512,14 +11585,15 @@ function handleImageFileSelect(input) {
   if (input.files && input.files[0]) loadImageFile(input.files[0]);
 }
 async function loadImageFile(file) {
-  if (!file.type.startsWith('image/')) { alert('Please choose an image file.'); return; }
+  if (!isClipboardImageFile(file)) { alert('Please choose an image file.'); return; }
   const info = document.getElementById('image-file-info');
   if (info) {
     info.textContent = `Optimizing ${file.name || 'image'}...`;
     info.style.display = 'block';
   }
   try {
-    const prepared = await prepareBoardImageFile(file);
+    const imageFile = await normalizeClipboardImageFile(file);
+    const prepared = await prepareBoardImageFile(imageFile);
     _pendingImageDataUrl = prepared.dataUrl;
     if (info) {
       const dims = prepared.width && prepared.height ? ` · ${prepared.width}x${prepared.height}` : '';
@@ -11545,7 +11619,8 @@ function addImageCardFromSource(src, title='Image', pos=null) {
 }
 
 async function addImageCardFromFile(file, title='Pasted image', pos=null) {
-  const prepared = await prepareBoardImageFile(file);
+  const imageFile = await normalizeClipboardImageFile(file);
+  const prepared = await prepareBoardImageFile(imageFile);
   const target = resolveBoardPlacement(pos || pendingImagePos);
   addCard('image', target.x, target.y, {
     title,
@@ -11677,14 +11752,27 @@ function scheduleAsyncClipboardPasteFallback() {
   }, 90);
 }
 
+function describeClipboardTypes(data) {
+  return Array.from(data?.types || []).join(', ') || Array.from(data?.items || []).map(item => item.type || item.kind).join(', ') || 'empty clipboard';
+}
+
+function reportClipboardMiss(data) {
+  const types = describeClipboardTypes(data);
+  if (/Files|image|public|uri-list/i.test(types)) {
+    console.warn('Board paste did not find a supported image. Clipboard types:', types);
+    toast && toast(`Clipboard image format not readable: ${types}`);
+  }
+}
+
 /* Global paste handler — add image directly to the board on Ctrl/⌘+V */
-document.addEventListener('paste', e => {
+function handleBoardPaste(e) {
+  if (e.__teachedBoardPasteSeen) return;
   // Don't hijack pasting inside inputs / editable fields
   if (isBoardTypingTarget(e.target)) return;
-  cleanupBoardClipboardCatcher();
+  e.__teachedBoardPasteSeen = true;
   const data = e.clipboardData;
   if (!data) {
-    if (_cardClipboard.length) { e.preventDefault(); pasteCards(); }
+    if (_cardClipboard.length) { e.preventDefault(); pasteCards(); cleanupBoardClipboardCatcher(); }
     return;
   }
   const files = Array.from(data.files || []);
@@ -11694,17 +11782,18 @@ document.addEventListener('paste', e => {
     addImageCardsFromFiles(files).catch(err => {
       toast && toast(err.message);
       alert(err.message);
-    });
+    }).finally(cleanupBoardClipboardCatcher);
     return;
   }
 
   const items = data.items || [];
   for (const item of items) {
-    if (item.type && (item.type.startsWith('image/') || isMacClipboardTiff(item.type))) {
+    if (item.kind === 'file' || (item.type && (item.type.startsWith('image/') || isMacClipboardTiff(item.type)))) {
       if (isMacClipboardTiff(item.type)) {
         e.preventDefault();
         _lastPasteHandledAt = performance.now();
         toast && toast('macOS gave TIFF. Try copying as PNG/JPG or drag the file.');
+        cleanupBoardClipboardCatcher();
         return;
       }
       const file = item.getAsFile();
@@ -11714,7 +11803,7 @@ document.addEventListener('paste', e => {
       addImageCardFromFile(file, file.name || 'Pasted image').catch(err => {
         toast && toast(err.message);
         alert(err.message);
-      });
+      }).finally(cleanupBoardClipboardCatcher);
       return;
     }
   }
@@ -11724,6 +11813,7 @@ document.addEventListener('paste', e => {
     e.preventDefault();
     _lastPasteHandledAt = performance.now();
     addImageCardFromSource(htmlSrc, 'Pasted image');
+    cleanupBoardClipboardCatcher();
     return;
   }
 
@@ -11732,6 +11822,7 @@ document.addEventListener('paste', e => {
     e.preventDefault();
     _lastPasteHandledAt = performance.now();
     addImageCardFromSource(plain, 'Pasted image');
+    cleanupBoardClipboardCatcher();
     return;
   }
 
@@ -11740,6 +11831,7 @@ document.addEventListener('paste', e => {
     e.preventDefault();
     _lastPasteHandledAt = performance.now();
     addImageCardFromSource(uriList, 'Pasted image');
+    cleanupBoardClipboardCatcher();
     return;
   }
 
@@ -11747,8 +11839,19 @@ document.addEventListener('paste', e => {
     e.preventDefault();
     _lastPasteHandledAt = performance.now();
     pasteCards();
+    cleanupBoardClipboardCatcher();
+    return;
   }
-});
+  window.setTimeout(() => {
+    if (!inspectBoardClipboardCatcherForImage()) {
+      reportClipboardMiss(data);
+      cleanupBoardClipboardCatcher();
+    }
+  }, 30);
+}
+
+window.addEventListener('paste', handleBoardPaste, true);
+document.addEventListener('paste', handleBoardPaste);
 
 /* Global drag-drop onto the board itself */
 ['dragover','drop'].forEach(ev => {
@@ -11768,20 +11871,11 @@ document.addEventListener('paste', e => {
       if (!files || !files.length) return;
       e.preventDefault();
       const file = files[0];
-      if (!file.type.startsWith('image/')) { toast && toast('Only image files are supported'); return; }
+      if (!isClipboardImageFile(file)) { toast && toast('Only image files are supported'); return; }
       (async () => {
         try {
-          const prepared = await prepareBoardImageFile(file);
           const pos = screenToBoard(e.clientX, e.clientY) || { x: 200, y: 100 };
-          addCard('image', pos.x, pos.y, {
-            title: file.name || 'Image',
-            src: prepared.dataUrl,
-            imageSize: prepared.bytes,
-            imageOptimized: prepared.optimized,
-          }, 320, 240);
-          scheduleSave && scheduleSave();
-          saveLocal && saveLocal();
-          toast && toast('🖼 Image added');
+          await addImageCardFromFile(file, file.name || 'Image', pos);
         } catch (err) {
           toast && toast(err.message);
           alert(err.message);
