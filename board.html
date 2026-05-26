@@ -246,7 +246,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font);
 .mq-btn.ghost{color:var(--text-3,#9999AA);}
 .mq-btn:active{transform:scale(.97);}
 .mq-status{
-  position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+  position:absolute;right:10px;bottom:calc(100% + 6px);transform:none;
   padding:3px 10px;border-radius:999px;
   background:var(--card-bg,#fff);
   border:1px solid rgba(0,0,0,.08);
@@ -254,10 +254,15 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font);
   box-shadow:0 2px 8px rgba(0,0,0,.06);
   white-space:nowrap;pointer-events:none;
   opacity:.92;
+  z-index:1;
 }
 [data-theme="dark"] .mq-status{background:#1F1F35;border-color:rgba(255,255,255,.10);}
 .mq-status.good{color:#15803d;}
 .mq-status.warn{color:#f97316;}
+.mt-btn,.mq-btn,.mobile-tool-item,.tb-btn,.qa-item{
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
 
 #mobile-tool-sheet{
   display:none;position:fixed;left:10px;right:10px;
@@ -468,6 +473,14 @@ body.mobile-tool-sheet-open::after{
 }
 .mt-btn:hover::after,
 .mt-btn:hover::before{ opacity:1; }
+.mt-btn:active::after,
+.mt-btn:active::before,
+.mt-btn.tip-suppressed::after,
+.mt-btn.tip-suppressed::before{opacity:0!important;display:none!important;}
+@media (hover:none), (pointer:coarse){
+  .mt-btn[data-tip]::after,
+  .mt-btn[data-tip]::before{content:none!important;display:none!important;}
+}
 
 /* ── ZOOM CONTROLS (bottom-right, Miro horizontal) ── */
 #zoom-controls {
@@ -6311,9 +6324,20 @@ function toggleCardLocked(cardId) {
   toast(card.data.locked ? 'Locked on board' : 'Unlocked');
   scheduleSave();
 }
+let _emptyStateRaf = 0;
+function _syncEmptyStateVisibility() {
+  if (!emptyState) return;
+  const hasCards = !!(state.cards?.length || board?.querySelector('.board-card'));
+  emptyState.classList.toggle('hidden', hasCards);
+  emptyState.setAttribute('aria-hidden', hasCards ? 'true' : 'false');
+}
 function updateEmpty() {
-  if (state.cards.length) emptyState.classList.add('hidden');
-  else emptyState.classList.remove('hidden');
+  _syncEmptyStateVisibility();
+  if (_emptyStateRaf) return;
+  _emptyStateRaf = requestAnimationFrame(() => {
+    _emptyStateRaf = 0;
+    _syncEmptyStateVisibility();
+  });
 }
 
 window.addEventListener('resize', positionLayerPopover);
@@ -6326,6 +6350,14 @@ let isSidebarDrag  = false, sidebarDragData = null;
 let isBoxSelecting = false, boxSelStart = {};
 let spaceDown      = false;
 const _timerIntervals = new Map(); // card.id → intervalId
+
+function cancelBoxSelection() {
+  if (!isBoxSelecting) return false;
+  isBoxSelecting = false;
+  boxSelStart = {};
+  if (selBox) selBox.style.display = 'none';
+  return true;
+}
 
 function startCardDrag(e, card) {
   if (card.data && card.data.locked) { toast('Locked card'); return; }
@@ -6908,9 +6940,26 @@ document.addEventListener('keyup', e => {
 });
 
 /* ════════════════════════ KEYBOARD ════════════════════════ */
+function isBoardTypingTarget(target) {
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return !!target.closest?.('[contenteditable],input,textarea,select,.text-format-toolbar,.note-body,.layer-popover');
+}
+
+document.addEventListener('pointerdown', e => {
+  const btn = e.target.closest?.('.mt-btn[data-tip]');
+  if (!btn) return;
+  btn.classList.add('tip-suppressed');
+  btn.blur?.();
+  window.setTimeout(() => btn.classList.remove('tip-suppressed'), 450);
+}, true);
+
 document.addEventListener('keydown', e => {
+  if (isBoardTypingTarget(e.target)) return;
   // Space = pan
-  if (e.code === 'Space' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+  if (e.code === 'Space') {
     if (!spaceDown) {
       spaceDown = true;
       boardWrap.style.cursor = 'grab';
@@ -6918,7 +6967,6 @@ document.addEventListener('keydown', e => {
     }
     e.preventDefault(); return;
   }
-  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
   if ((e.ctrlKey||e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
   if ((e.ctrlKey||e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
@@ -6939,6 +6987,7 @@ document.addEventListener('keydown', e => {
 
   if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
   if (e.key === 'Escape') {
+    cancelBoxSelection();
     clearSelection();
     cancelConnection();
     setMode('select');
@@ -11465,8 +11514,7 @@ function isLikelyImageSource(src) {
 /* Global paste handler — add image directly to the board on Ctrl/⌘+V */
 document.addEventListener('paste', e => {
   // Don't hijack pasting inside inputs / editable fields
-  const t = e.target;
-  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (isBoardTypingTarget(e.target)) return;
   const data = e.clipboardData;
   if (!data) {
     if (_cardClipboard.length) { e.preventDefault(); pasteCards(); }
@@ -11849,8 +11897,7 @@ window.addEventListener('message', e => {
 
 // G shortcut to open Games Hub
 document.addEventListener('keydown', e => {
-  const t = e.target;
-  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (isBoardTypingTarget(e.target)) return;
   if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
   if (e.key === 'g' || e.key === 'G') { e.preventDefault(); openGamesModal(); }
 });
@@ -12405,8 +12452,7 @@ if (window.PointerEvent) {
 // Keyboard shortcuts: P (pencil), H (highlighter), F (frame)
 document.addEventListener('keydown', e => {
   // Skip if typing in an input
-  const t = e.target;
-  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (isBoardTypingTarget(e.target)) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Escape' && _drawTool) {
     e.preventDefault();
