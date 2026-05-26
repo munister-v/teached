@@ -1419,6 +1419,10 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   text-align:center;pointer-events:none;color:var(--text-3);transition:opacity .3s;
 }
 #empty-state.hidden{opacity:0;}
+#board-clipboard-catcher{
+  position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;
+  opacity:0;pointer-events:none;overflow:hidden;white-space:pre;
+}
 .empty-icon{font-size:52px;line-height:1;margin-bottom:14px;opacity:.7;}
 .empty-text{font-size:15px;font-weight:800;color:var(--text-2);margin-bottom:10px;}
 .empty-sub{display:flex;flex-direction:column;gap:6px;align-items:center;}
@@ -2832,6 +2836,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 
 <!-- BOARD WRAP -->
 <div id="board-wrap">
+  <div id="board-clipboard-catcher" contenteditable="true" aria-hidden="true"></div>
   <!-- Snap alignment guides (Miro-style) -->
   <svg id="snap-guides" xmlns="http://www.w3.org/2000/svg"></svg>
   <!-- Arrow SVG layer (screen-space) -->
@@ -6942,6 +6947,7 @@ document.addEventListener('keyup', e => {
 /* ════════════════════════ KEYBOARD ════════════════════════ */
 function isBoardTypingTarget(target) {
   if (!target) return false;
+  if (target.id === 'board-clipboard-catcher') return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
@@ -6973,16 +6979,18 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key === 's') { e.preventDefault(); forceSave(); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'a') { e.preventDefault(); state.cards.forEach(c => selectCard(c.id)); return; }
   if ((e.ctrlKey||e.metaKey) && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'c' && !e.shiftKey) {
+  const shortcutKey = String(e.key || '').toLowerCase();
+  if ((e.ctrlKey||e.metaKey) && shortcutKey === 'c' && !e.shiftKey) {
     if (state.selected.size) {
       e.preventDefault();
       copySelectedCards();
     }
     return;
   }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'v' && !e.shiftKey) {
+  if ((e.ctrlKey||e.metaKey) && shortcutKey === 'v' && !e.shiftKey) {
     // Let the paste event inspect clipboard items first; it can decide between
     // image paste and internal card paste.
+    focusBoardClipboardCatcher();
     scheduleAsyncClipboardPasteFallback();
     return;
   }
@@ -7096,6 +7104,23 @@ function cycleSelection(direction) {
 let _cardClipboard = [];
 let _lastPasteHandledAt = 0;
 let _asyncClipboardPasteInFlight = false;
+
+function focusBoardClipboardCatcher() {
+  if (isBoardTypingTarget(document.activeElement)) return;
+  const catcher = document.getElementById('board-clipboard-catcher');
+  if (!catcher) return;
+  catcher.textContent = '';
+  catcher.focus({ preventScroll: true });
+}
+
+function cleanupBoardClipboardCatcher() {
+  const catcher = document.getElementById('board-clipboard-catcher');
+  if (!catcher) return;
+  window.setTimeout(() => {
+    catcher.textContent = '';
+    if (document.activeElement === catcher) catcher.blur();
+  }, 0);
+}
 
 function copySelectedCards() {
   if (!state.selected.size) { toast && toast('Select cards first'); return; }
@@ -11404,9 +11429,26 @@ function loadImageElement(file) {
   });
 }
 
+function fileNameLooksLikeImage(file) {
+  return /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|heif|tiff?)$/i.test(file?.name || '');
+}
+
+function isMacClipboardTiff(type) {
+  return /^(image\/tiff?|public\.tiff)$/i.test(type || '');
+}
+
+function isClipboardImageFile(file) {
+  if (!file) return false;
+  if (file.type?.startsWith('image/')) return true;
+  return fileNameLooksLikeImage(file);
+}
+
 async function prepareBoardImageFile(file) {
-  if (!file || !file.type || !file.type.startsWith('image/')) {
+  if (!isClipboardImageFile(file)) {
     throw new Error('Please choose an image file.');
+  }
+  if (isMacClipboardTiff(file.type)) {
+    throw new Error('macOS copied this image as TIFF. Copy it as PNG/JPG or drag the image file onto the board.');
   }
   if (file.size > BOARD_IMAGE_MAX_INPUT_BYTES) {
     throw new Error(`Image is too large. Max ${formatImageBytes(BOARD_IMAGE_MAX_INPUT_BYTES)}.`);
@@ -11519,7 +11561,7 @@ async function addImageCardFromFile(file, title='Pasted image', pos=null) {
 }
 
 async function addImageCardsFromFiles(files, pos=null) {
-  const imageFiles = Array.from(files || []).filter(file => file?.type?.startsWith('image/'));
+  const imageFiles = Array.from(files || []).filter(isClipboardImageFile);
   if (!imageFiles.length) return false;
   _lastPasteHandledAt = performance.now();
   let offset = 0;
@@ -11550,6 +11592,7 @@ function isLikelyImageSource(src) {
   if (!value) return false;
   if (/^data:image\//i.test(value)) return true;
   if (/^blob:/i.test(value)) return true;
+  if (/^file:\/\//i.test(value)) return false;
   if (!/^https?:\/\//i.test(value)) return false;
   return /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(value) ||
     /[?&](format|fm|mime)=?(png|jpe?g|webp|gif)/i.test(value) ||
@@ -11601,8 +11644,12 @@ async function pasteFromAsyncClipboard() {
   try {
     const items = await navigator.clipboard.read();
     for (const item of items) {
-      const imageType = item.types.find(type => type.startsWith('image/'));
+      const imageType = item.types.find(type => type.startsWith('image/') || isMacClipboardTiff(type));
       if (!imageType) continue;
+      if (isMacClipboardTiff(imageType)) {
+        toast && toast('macOS gave TIFF. Try copying as PNG/JPG or drag the file.');
+        return false;
+      }
       const blob = await item.getType(imageType);
       const ext = imageType.split('/')[1] || 'png';
       const file = new File([blob], `clipboard.${ext}`, { type: imageType });
@@ -11634,13 +11681,14 @@ function scheduleAsyncClipboardPasteFallback() {
 document.addEventListener('paste', e => {
   // Don't hijack pasting inside inputs / editable fields
   if (isBoardTypingTarget(e.target)) return;
+  cleanupBoardClipboardCatcher();
   const data = e.clipboardData;
   if (!data) {
     if (_cardClipboard.length) { e.preventDefault(); pasteCards(); }
     return;
   }
   const files = Array.from(data.files || []);
-  if (files.some(file => file?.type?.startsWith('image/'))) {
+  if (files.some(isClipboardImageFile)) {
     e.preventDefault();
     _lastPasteHandledAt = performance.now();
     addImageCardsFromFiles(files).catch(err => {
@@ -11652,7 +11700,13 @@ document.addEventListener('paste', e => {
 
   const items = data.items || [];
   for (const item of items) {
-    if (item.type && item.type.startsWith('image/')) {
+    if (item.type && (item.type.startsWith('image/') || isMacClipboardTiff(item.type))) {
+      if (isMacClipboardTiff(item.type)) {
+        e.preventDefault();
+        _lastPasteHandledAt = performance.now();
+        toast && toast('macOS gave TIFF. Try copying as PNG/JPG or drag the file.');
+        return;
+      }
       const file = item.getAsFile();
       if (!file) continue;
       e.preventDefault();
@@ -11678,6 +11732,14 @@ document.addEventListener('paste', e => {
     e.preventDefault();
     _lastPasteHandledAt = performance.now();
     addImageCardFromSource(plain, 'Pasted image');
+    return;
+  }
+
+  const uriList = (data.getData('text/uri-list') || '').split(/\r?\n/).map(s => s.trim()).find(s => s && !s.startsWith('#'));
+  if (isLikelyImageSource(uriList)) {
+    e.preventDefault();
+    _lastPasteHandledAt = performance.now();
+    addImageCardFromSource(uriList, 'Pasted image');
     return;
   }
 
