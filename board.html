@@ -913,6 +913,77 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .board-card.card-comment.selected .comment-thread-chip{
   box-shadow:0 0 0 2px #4262FF,0 14px 32px rgba(12,12,24,.16);
 }
+.board-card.card-comment.comment-resolved .comment-thread-chip{
+  opacity:.68;background:rgba(255,255,255,.92);box-shadow:0 6px 18px rgba(12,12,24,.10);
+}
+.board-card.card-comment.comment-resolved .comment-thread-avatar{background:#DCFCE7;color:#166534;}
+.comment-thread-meta{display:flex;align-items:center;gap:5px;flex:0 0 auto;}
+.comment-thread-count{
+  min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#EEF2FF;color:#4F46E5;
+  display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;
+}
+
+/* Miro-style board comment thread */
+#board-comment-thread-popover{
+  position:fixed;left:0;top:0;z-index:10045;display:none;width:min(360px,calc(100vw - 24px));
+  border-radius:22px;background:#fff;border:1px solid rgba(12,12,24,.10);
+  box-shadow:0 24px 70px rgba(12,12,24,.22),0 3px 12px rgba(12,12,24,.08);
+  color:#172033;overflow:hidden;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+#board-comment-thread-popover.show{display:block;}
+.board-comment-thread-head{
+  display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(12,12,24,.08);
+  background:linear-gradient(180deg,#fff,#fafafa);
+}
+.board-comment-thread-title{font:900 13px/1.2 var(--font);letter-spacing:-.01em;margin-right:auto;}
+.board-comment-thread-state{
+  border:0;border-radius:999px;padding:7px 10px;background:#ECFCCB;color:#3F6212;
+  font:900 11px/1 var(--font);cursor:pointer;
+}
+.board-comment-thread-state.is-resolved{background:#E5E7EB;color:#4B5563;}
+.board-comment-thread-icon{
+  width:30px;height:30px;border:0;border-radius:999px;background:rgba(17,24,39,.06);color:#172033;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font:900 15px/1 var(--font);
+}
+.board-comment-thread-icon:hover{background:rgba(17,24,39,.10);}
+#board-comment-thread-list{
+  max-height:280px;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;
+}
+.board-comment-message{display:flex;gap:9px;align-items:flex-start;}
+.board-comment-message-avatar{
+  width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:#F6E58D;color:#172033;font:900 12px/1 var(--font);flex:0 0 auto;
+}
+.board-comment-message-body{min-width:0;flex:1;}
+.board-comment-message-meta{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.board-comment-message-author{font:900 12px/1.2 var(--font);color:#172033;}
+.board-comment-message-time{font:800 10px/1.2 var(--font);color:rgba(23,32,51,.45);}
+.board-comment-message-text{font:600 13px/1.35 var(--font);color:#293244;white-space:pre-wrap;overflow-wrap:anywhere;}
+.board-comment-reply-box{padding:0 14px 14px;}
+#board-comment-reply-input{
+  width:100%;min-height:76px;resize:vertical;border:1px solid rgba(12,12,24,.10);border-radius:16px;
+  padding:11px 12px;outline:0;background:#F9FAFB;color:#172033;font:600 13px/1.35 var(--font);
+}
+#board-comment-reply-input:focus{border-color:#9EC41A;box-shadow:0 0 0 4px rgba(158,196,26,.16);background:#fff;}
+.board-comment-reply-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:9px;}
+.board-comment-reply-send{
+  border:0;border-radius:999px;background:#9EC41A;color:#fff;padding:9px 14px;font:900 12px/1 var(--font);
+  cursor:pointer;box-shadow:0 10px 20px rgba(158,196,26,.20);
+}
+.board-comment-reply-send:hover{background:#8EB315;}
+.board-comment-muted-btn{
+  border:0;background:transparent;color:rgba(23,32,51,.56);padding:8px 10px;border-radius:999px;
+  font:900 12px/1 var(--font);cursor:pointer;
+}
+.board-comment-muted-btn:hover{background:rgba(17,24,39,.06);color:#172033;}
+@media(max-width:700px){
+  #board-comment-thread-popover{
+    left:10px!important;right:10px!important;top:auto!important;bottom:12px!important;width:auto;
+    border-radius:24px;max-height:calc(100vh - 96px);
+  }
+  #board-comment-thread-list{max-height:38vh;}
+  #board-comment-reply-input{font-size:16px;}
+}
 
 /* Legacy single SE resize handle - kept hidden, replaced by 8-handle system */
 .card-resize{display:none;}
@@ -2618,6 +2689,23 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   <button class="comment-composer-action comment-composer-close" type="button" id="board-comment-close" title="Cancel">×</button>
 </div>
 
+<div id="board-comment-thread-popover" aria-label="Board comment thread">
+  <div class="board-comment-thread-head">
+    <div class="board-comment-thread-title">Comment</div>
+    <button class="board-comment-thread-state" type="button" id="board-comment-resolve">Resolve</button>
+    <button class="board-comment-thread-icon" type="button" id="board-comment-delete" title="Delete comment">⌫</button>
+    <button class="board-comment-thread-icon" type="button" id="board-comment-thread-close" title="Close">×</button>
+  </div>
+  <div id="board-comment-thread-list"></div>
+  <div class="board-comment-reply-box">
+    <textarea id="board-comment-reply-input" placeholder="Reply..."></textarea>
+    <div class="board-comment-reply-actions">
+      <button class="board-comment-muted-btn" type="button" id="board-comment-copy">Copy</button>
+      <button class="board-comment-reply-send" type="button" id="board-comment-reply-send">Reply</button>
+    </div>
+  </div>
+</div>
+
 <!-- SHAPE PANEL -->
 <div id="shape-panel">
   <span class="sp-title">Shapes</span>
@@ -3497,6 +3585,7 @@ function applyTransform() {
   _scheduleArrows();
   _scheduleMinimap();
   _scheduleLayerPopover();
+  if (typeof positionBoardCommentThreadPopover === 'function') positionBoardCommentThreadPopover();
   if (!_isMomentum) wsSendViewport();
 }
 
@@ -3698,6 +3787,11 @@ function getCardZ(card) {
   return Number.isFinite(z) && z >= 0 ? z : 1;
 }
 
+function getCardRenderZ(card) {
+  const z = getCardZ(card);
+  return card?.type === 'comment' ? 10000 + z : z;
+}
+
 function nextCardZ() {
   return state.cards.reduce((max, c) => Math.max(max, getCardZ(c)), 0) + 1;
 }
@@ -3709,7 +3803,7 @@ function normalizeCardLayer(card, fallbackZ) {
 
 function applyCardLayer(card) {
   const el = getCardEl(card.id);
-  if (el) el.style.zIndex = getCardZ(card);
+  if (el) el.style.zIndex = getCardRenderZ(card);
 }
 
 function defaultTextData(data={}) {
@@ -3750,12 +3844,12 @@ function renderCard(card) {
       el.classList.add('card-private-mine');
     } else {
       el.dataset.id = card.id;
-      el.style.cssText = `left:${card.x}px;top:${card.y}px;width:${card.w}px;height:${card.h}px;z-index:${getCardZ(card)};display:none;`;
+      el.style.cssText = `left:${card.x}px;top:${card.y}px;width:${card.w}px;height:${card.h}px;z-index:${getCardRenderZ(card)};display:none;`;
       return el;
     }
   }
   el.dataset.id = card.id;
-  el.style.cssText = `left:${card.x}px;top:${card.y}px;width:${card.w}px;height:${card.h}px;z-index:${getCardZ(card)};`;
+  el.style.cssText = `left:${card.x}px;top:${card.y}px;width:${card.w}px;height:${card.h}px;z-index:${getCardRenderZ(card)};`;
 
   // Dispatch renderers
   if      (card.type === 'sticky')     renderSticky(el, card);
@@ -4013,29 +4107,69 @@ function fitStickyText(ta, card) {
   ta.style.fontSize = size + 'px';
 }
 
-function renderCommentCard(el, card) {
-  const d = card.data || {};
-  const body = document.createElement('div');
-  body.className = 'card-body comment-card-body';
-  const text = String(d.body || d.text || 'Comment').trim() || 'Comment';
-  const fallbackName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || 'Teacher';
-  const name = d.author || fallbackName;
-  const initials = name
+function getCommentAuthorName() {
+  return (typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || 'Teacher';
+}
+
+function getCommentInitials(name) {
+  return String(name || 'Teacher')
     .split(/\s|@/)
     .filter(Boolean)
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase())
     .join('') || '💬';
-  const time = d.createdAt ? new Date(d.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : 'now';
+}
+
+function formatCommentTime(iso) {
+  if (!iso) return 'now';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'now';
+  const sameDay = new Date().toDateString() === d.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+    : d.toLocaleDateString([], { month:'short', day:'numeric' });
+}
+
+function normalizeCommentData(card) {
+  card.data = card.data || {};
+  if (!card.data.body && card.data.text) card.data.body = card.data.text;
+  if (!card.data.body) card.data.body = 'Comment';
+  if (!card.data.author) card.data.author = getCommentAuthorName();
+  if (!card.data.createdAt) card.data.createdAt = new Date().toISOString();
+  if (!Array.isArray(card.data.replies)) card.data.replies = [];
+  return card.data;
+}
+
+function renderCommentCard(el, card) {
+  const d = normalizeCommentData(card);
+  const body = document.createElement('div');
+  body.className = 'card-body comment-card-body';
+  el.classList.toggle('comment-resolved', !!d.resolved);
+  const text = String(d.body || 'Comment').trim() || 'Comment';
+  const replyCount = d.replies.length;
+  const status = d.resolved ? 'Resolved comment' : 'Open comment';
   body.innerHTML = `
-    <div class="comment-thread-chip" title="${esc(text)}">
-      <div class="comment-thread-avatar">${esc(initials)}</div>
+    <div class="comment-thread-chip" title="${esc(status + ': ' + text)}" role="button" tabindex="0">
+      <div class="comment-thread-avatar">${esc(d.resolved ? '✓' : getCommentInitials(d.author))}</div>
       <div class="comment-thread-text">${esc(text)}</div>
-      <div class="comment-thread-time">${esc(time)}</div>
+      <div class="comment-thread-meta">
+        ${replyCount ? `<span class="comment-thread-count">${replyCount + 1}</span>` : ''}
+        <div class="comment-thread-time">${esc(formatCommentTime(d.createdAt))}</div>
+      </div>
     </div>`;
-  body.querySelector('.comment-thread-chip')?.addEventListener('dblclick', e => {
+  const chip = body.querySelector('.comment-thread-chip');
+  const open = e => {
+    if (dragStarted) return;
+    e.preventDefault();
     e.stopPropagation();
-    toast && toast(text);
+    clearSelection();
+    selectCard(card.id);
+    hideLayerPopover();
+    showBoardCommentThread(card.id, e.clientX || null, e.clientY || null);
+  };
+  chip?.addEventListener('click', open);
+  chip?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') open(e);
   });
   el.appendChild(body);
 }
@@ -5806,6 +5940,7 @@ function updateCardPos(card) {
   const el = getCardEl(card.id);
   if (el) { el.style.left = card.x+'px'; el.style.top = card.y+'px'; }
   positionLayerPopover();
+  if (card.type === 'comment' && typeof positionBoardCommentThreadPopover === 'function') positionBoardCommentThreadPopover();
 }
 
 function selectCard(id, _fromGroup) {
@@ -6740,6 +6875,7 @@ document.addEventListener('keydown', e => {
     // Exit placement / comment modes
     if (typeof cancelPlaceMode === 'function') cancelPlaceMode();
     if (typeof disableCommentMode === 'function') disableCommentMode();
+    if (typeof hideBoardCommentThreadPopover === 'function') hideBoardCommentThreadPopover();
     closeBoardSearchBar();
     closeShortcuts();
     // Close all menus/popovers
@@ -7071,6 +7207,154 @@ function submitBoardCommentComposer() {
   saveLocal && saveLocal();
 }
 
+let _openCommentCardId = null;
+
+function getOpenCommentCard() {
+  return _openCommentCardId ? state.cards.find(c => c.id === _openCommentCardId && c.type === 'comment') : null;
+}
+
+function refreshCommentCard(card) {
+  const selected = state.selected.has(card.id);
+  reRenderCard(card);
+  if (selected) getCardEl(card.id)?.classList.add('selected');
+  positionBoardCommentThreadPopover();
+}
+
+function commentMessageHtml(message, fallbackAuthor) {
+  const author = message.author || fallbackAuthor || getCommentAuthorName();
+  return `
+    <div class="board-comment-message">
+      <div class="board-comment-message-avatar">${esc(getCommentInitials(author))}</div>
+      <div class="board-comment-message-body">
+        <div class="board-comment-message-meta">
+          <span class="board-comment-message-author">${esc(author)}</span>
+          <span class="board-comment-message-time">${esc(formatCommentTime(message.createdAt))}</span>
+        </div>
+        <div class="board-comment-message-text">${esc(message.body || message.text || '')}</div>
+      </div>
+    </div>`;
+}
+
+function renderBoardCommentThread() {
+  const card = getOpenCommentCard();
+  const pop = document.getElementById('board-comment-thread-popover');
+  const list = document.getElementById('board-comment-thread-list');
+  const resolveBtn = document.getElementById('board-comment-resolve');
+  if (!card || !pop || !list) return;
+  const d = normalizeCommentData(card);
+  const messages = [{ body:d.body, author:d.author, createdAt:d.createdAt }, ...d.replies];
+  list.innerHTML = messages.map(m => commentMessageHtml(m, d.author)).join('');
+  document.querySelector('.board-comment-thread-title').textContent =
+    `${messages.length} message${messages.length === 1 ? '' : 's'}`;
+  if (resolveBtn) {
+    resolveBtn.textContent = d.resolved ? 'Reopen' : 'Resolve';
+    resolveBtn.classList.toggle('is-resolved', !!d.resolved);
+  }
+}
+
+function positionBoardCommentThreadPopover() {
+  const pop = document.getElementById('board-comment-thread-popover');
+  const card = getOpenCommentCard();
+  if (!pop || !card || !pop.classList.contains('show')) return;
+  if (window.innerWidth <= 700) return;
+  const el = getCardEl(card.id);
+  if (!el) { hideBoardCommentThreadPopover(); return; }
+  const r = el.getBoundingClientRect();
+  const margin = 12;
+  const w = pop.offsetWidth || 360;
+  const h = pop.offsetHeight || 420;
+  let left = r.right + 12;
+  if (left + w + margin > window.innerWidth) left = r.left - w - 12;
+  let top = r.top - 10;
+  left = Math.min(window.innerWidth - w - margin, Math.max(margin, left));
+  top = Math.min(window.innerHeight - h - margin, Math.max(margin, top));
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+
+function showBoardCommentThread(cardId, clientX, clientY) {
+  const card = state.cards.find(c => c.id === cardId && c.type === 'comment');
+  const pop = document.getElementById('board-comment-thread-popover');
+  if (!card || !pop) return;
+  _openCommentCardId = cardId;
+  renderBoardCommentThread();
+  pop.classList.add('show');
+  pop.style.left = (clientX || 0) + 'px';
+  pop.style.top = (clientY || 0) + 'px';
+  requestAnimationFrame(() => {
+    positionBoardCommentThreadPopover();
+    [40, 140, 280].forEach(delay => {
+      setTimeout(() => {
+        const input = document.getElementById('board-comment-reply-input');
+        if (!input || !pop.classList.contains('show')) return;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }, delay);
+    });
+  });
+}
+
+function hideBoardCommentThreadPopover() {
+  const pop = document.getElementById('board-comment-thread-popover');
+  if (pop) pop.classList.remove('show');
+  _openCommentCardId = null;
+}
+
+function addBoardCommentReply() {
+  const card = getOpenCommentCard();
+  const input = document.getElementById('board-comment-reply-input');
+  const text = input?.value.trim();
+  if (!card || !input) return;
+  if (!text) { input.focus(); return; }
+  snapshot();
+  const d = normalizeCommentData(card);
+  d.replies.push({ body:text, author:getCommentAuthorName(), createdAt:new Date().toISOString() });
+  input.value = '';
+  refreshCommentCard(card);
+  renderBoardCommentThread();
+  scheduleSave && scheduleSave();
+  saveLocal && saveLocal();
+}
+
+function toggleBoardCommentResolved() {
+  const card = getOpenCommentCard();
+  if (!card) return;
+  snapshot();
+  const d = normalizeCommentData(card);
+  d.resolved = !d.resolved;
+  refreshCommentCard(card);
+  renderBoardCommentThread();
+  scheduleSave && scheduleSave();
+  saveLocal && saveLocal();
+}
+
+function deleteBoardCommentThread() {
+  const card = getOpenCommentCard();
+  if (!card) return;
+  hideBoardCommentThreadPopover();
+  removeCard(card.id);
+}
+
+async function copyBoardCommentThread() {
+  const card = getOpenCommentCard();
+  if (!card) return;
+  const d = normalizeCommentData(card);
+  const text = [d.body, ...d.replies.map(r => r.body || r.text || '')].filter(Boolean).join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    toast && toast('Comment copied');
+  } catch {
+    const input = document.getElementById('board-comment-reply-input');
+    if (input) {
+      input.value = text;
+      input.select();
+      document.execCommand && document.execCommand('copy');
+      input.value = '';
+      toast && toast('Comment copied');
+    }
+  }
+}
+
 document.getElementById('board-comment-composer')?.addEventListener('mousedown', e => e.stopPropagation());
 document.getElementById('board-comment-composer')?.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 document.getElementById('board-comment-send')?.addEventListener('click', e => {
@@ -7102,6 +7386,45 @@ document.getElementById('board-comment-input')?.addEventListener('keydown', e =>
     hideBoardCommentComposer();
     disableCommentMode();
   }
+});
+document.getElementById('board-comment-thread-popover')?.addEventListener('mousedown', e => e.stopPropagation());
+document.getElementById('board-comment-thread-popover')?.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+document.getElementById('board-comment-thread-close')?.addEventListener('click', e => {
+  e.stopPropagation();
+  hideBoardCommentThreadPopover();
+});
+document.getElementById('board-comment-reply-send')?.addEventListener('click', e => {
+  e.stopPropagation();
+  addBoardCommentReply();
+});
+document.getElementById('board-comment-resolve')?.addEventListener('click', e => {
+  e.stopPropagation();
+  toggleBoardCommentResolved();
+});
+document.getElementById('board-comment-delete')?.addEventListener('click', e => {
+  e.stopPropagation();
+  deleteBoardCommentThread();
+});
+document.getElementById('board-comment-copy')?.addEventListener('click', e => {
+  e.stopPropagation();
+  copyBoardCommentThread();
+});
+document.getElementById('board-comment-reply-input')?.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if ((e.key === 'Enter' && (e.ctrlKey || e.metaKey)) || (e.key === 'Enter' && !e.shiftKey)) {
+    e.preventDefault();
+    addBoardCommentReply();
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    hideBoardCommentThreadPopover();
+  }
+});
+document.addEventListener('mousedown', e => {
+  const pop = document.getElementById('board-comment-thread-popover');
+  if (!pop?.classList.contains('show')) return;
+  if (e.target.closest('#board-comment-thread-popover,.card-comment')) return;
+  hideBoardCommentThreadPopover();
 });
 
 // Handle click in comment mode (wired into the main mousedown handler)
