@@ -1,7 +1,7 @@
 /* Mobile integrity guard: keep pages stable on phones without layout zoom jumps. */
 @media (max-width: 860px) {
   :root {
-    --mob-nav-h: 60px;
+    --mob-nav-h: 64px;
     --mob-content-pb: calc(var(--mob-nav-h) + env(safe-area-inset-bottom, 0px) + 12px);
   }
 
@@ -48,7 +48,7 @@
 
   body.board-page #board-wrap {
     top: calc(var(--tb-h, 54px) + env(safe-area-inset-top, 0px)) !important;
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px)) !important;
     touch-action: none;
     overscroll-behavior: none;
   }

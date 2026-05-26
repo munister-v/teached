@@ -224,10 +224,11 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font);
   border:1px solid rgba(0,0,0,.08);border-radius:16px;
   box-shadow:0 12px 36px rgba(5,5,23,.16),0 1px 4px rgba(0,0,0,.06);
   gap:4px;align-items:stretch;justify-content:space-between;
+  touch-action:manipulation;
 }
 [data-theme="dark"] #mobile-quickbar{background:#1F1F35;border-color:rgba(255,255,255,.10);}
 .mq-btn{
-  flex:1;min-width:0;height:46px;
+  flex:1;min-width:0;height:48px;
   border:none;border-radius:11px;background:transparent;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   padding:4px 2px;
@@ -240,6 +241,8 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font);
 .mq-btn.active{background:color-mix(in srgb,var(--accent,#4262FF) 14%,transparent);color:var(--accent,#4262FF);}
 .mq-btn.primary{background:var(--accent,#4262FF);color:#fff;}
 .mq-btn.primary:hover,.mq-btn.primary:active{background:color-mix(in srgb,var(--accent,#4262FF) 85%,#000);color:#fff;}
+.mq-btn.primary-lime{background:#C8E632;color:#1C1C1E;box-shadow:0 6px 18px rgba(200,230,50,.28);}
+.mq-btn.primary-lime:hover,.mq-btn.primary-lime:active{background:#B9DC2A;color:#1C1C1E;}
 .mq-btn.ghost{color:var(--text-3,#9999AA);}
 .mq-btn:active{transform:scale(.97);}
 .mq-status{
@@ -255,6 +258,48 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font);
 [data-theme="dark"] .mq-status{background:#1F1F35;border-color:rgba(255,255,255,.10);}
 .mq-status.good{color:#15803d;}
 .mq-status.warn{color:#f97316;}
+
+#mobile-tool-sheet{
+  display:none;position:fixed;left:10px;right:10px;
+  bottom:calc(74px + env(safe-area-inset-bottom,0px));
+  z-index:2300;background:var(--card-bg,#fff);border:1px solid rgba(0,0,0,.08);
+  border-radius:24px;box-shadow:0 20px 60px rgba(5,5,23,.22),0 2px 8px rgba(0,0,0,.08);
+  padding:10px 12px 14px;max-height:min(68vh,520px);overflow:auto;
+  -webkit-overflow-scrolling:touch;transform:translateY(12px);opacity:0;
+  transition:transform .22s cubic-bezier(.34,1.2,.64,1),opacity .18s ease;
+}
+#mobile-tool-sheet.show{display:block;transform:translateY(0);opacity:1;}
+[data-theme="dark"] #mobile-tool-sheet{background:#1F1F35;border-color:rgba(255,255,255,.10);}
+body.mobile-tool-sheet-open::after{
+  content:"";position:fixed;inset:0;background:rgba(15,12,30,.38);
+  z-index:2250;animation:bvf-fade .18s ease both;pointer-events:auto;
+}
+.mobile-tool-handle{width:44px;height:4px;border-radius:999px;background:rgba(0,0,0,.18);margin:0 auto 12px;}
+[data-theme="dark"] .mobile-tool-handle{background:rgba(255,255,255,.22);}
+.mobile-tool-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+.mobile-tool-title{font:900 15px/1.2 var(--font);letter-spacing:-.02em;color:var(--text,#050038);}
+.mobile-tool-sub{font:700 11px/1.35 var(--font);color:var(--text-3,#9999AA);margin-top:2px;}
+.mobile-tool-close{
+  width:40px;height:40px;border:0;border-radius:14px;background:rgba(0,0,0,.06);color:var(--text,#050038);
+  font:900 20px/1 var(--font);display:flex;align-items:center;justify-content:center;
+}
+.mobile-tool-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.mobile-tool-item{
+  min-height:72px;border:1px solid rgba(0,0,0,.08);border-radius:16px;background:rgba(250,250,248,.88);
+  color:var(--text,#050038);font-family:var(--font);font-weight:850;font-size:12px;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;
+  padding:10px 10px;text-align:left;touch-action:manipulation;
+}
+.mobile-tool-item:active{transform:scale(.97);background:rgba(200,230,50,.16);}
+.mobile-tool-item strong{font-size:20px;line-height:1;}
+.mobile-tool-item span{line-height:1.15;}
+.mobile-tool-item small{display:block;color:var(--text-3,#9999AA);font-size:10px;font-weight:750;line-height:1.2;}
+.mobile-tool-item.primary{background:#C8E632;border-color:#C8E632;color:#1C1C1E;}
+.mobile-tool-item.danger{color:#dc2626;background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.18);}
+[data-theme="dark"] .mobile-tool-item{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10);color:#F8F8FF;}
+@media(max-width:390px){
+  .mobile-tool-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
 
 /* ── SIDEBAR ── */
 #sidebar{
@@ -2096,7 +2141,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   #zoom-hint{display:none!important;}
   /* Push share/reconnect/follow banners above the quickbar */
   #share-panel,#reconnect-banner,#offline-banner,#conflict-banner,#follow-banner{
-    bottom:calc(72px + env(safe-area-inset-bottom,0px))!important;
+    bottom:calc(82px + env(safe-area-inset-bottom,0px))!important;
   }
   /* Bigger card-close, anchor dots, resize handles for finger taps */
   .card-close{width:26px!important;height:26px!important;font-size:16px!important;}
@@ -2216,7 +2261,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 @media(max-width:480px){
   .tb-btn{min-width:28px;height:28px;font-size:12px;}
   .tb-title{max-width:36vw!important;font-size:12px;}
-  .mq-btn{height:40px;font-size:11px}
+  .mq-btn{height:48px;font-size:10px}
 }
 /* Print styles */
 @media print {
@@ -2539,26 +2584,51 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 
 <div id="mobile-quickbar">
   <div class="mq-status good" id="mobile-save-status">Saved</div>
-  <button class="mq-btn ghost" type="button" onclick="document.getElementById('btn-fit').click()" aria-label="Fit board to screen">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>
-    <span>Fit</span>
+  <button class="mq-btn active" type="button" id="mq-select" onclick="setMiroTool('select')" aria-label="Select and move cards">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 1l12 6-5 1.5L7 14 2 1z"/></svg>
+    <span>Select</span>
+  </button>
+  <button class="mq-btn primary-lime" type="button" id="mq-add" onclick="toggleMobileToolSheet()" aria-label="Add board item">
+    <span style="font-size:18px;line-height:1" aria-hidden="true">＋</span>
+    <span>Add</span>
   </button>
   <button class="mq-btn" type="button" id="mq-pen" onclick="toggleDrawTool&&toggleDrawTool('pen', event)" aria-label="Pen">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 14l3-1 8-8-2-2-8 8z"/><path d="M11 3l2 2"/></svg>
     <span>Pen</span>
   </button>
-  <button class="mq-btn" type="button" onclick="document.getElementById('btn-connect').click()" aria-label="Connect cards">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><path d="M5 8h6"/></svg>
-    <span>Connect</span>
-  </button>
-  <button class="mq-btn primary" type="button" onclick="openSharePanel()" aria-label="Share board">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7l4-2M6 9l4 2"/></svg>
-    <span>Share</span>
+  <button class="mq-btn" type="button" id="mq-comment" onclick="toggleCommentMode()" aria-label="Add comment">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3h10v7H7l-4 3z"/></svg>
+    <span>Comment</span>
   </button>
   <button class="mq-btn ghost" type="button" onclick="toggleMoreMenu()" aria-label="More actions">
     <span style="font-size:18px;line-height:1" aria-hidden="true">⋯</span>
     <span>More</span>
   </button>
+</div>
+
+<div id="mobile-tool-sheet" aria-label="Mobile board tools">
+  <div class="mobile-tool-handle"></div>
+  <div class="mobile-tool-head">
+    <div>
+      <div class="mobile-tool-title">Board tools</div>
+      <div class="mobile-tool-sub">Quick add, draw, share, and recover actions</div>
+    </div>
+    <button class="mobile-tool-close" type="button" onclick="closeMobileToolSheet()" aria-label="Close tools">×</button>
+  </div>
+  <div class="mobile-tool-grid">
+    <button class="mobile-tool-item primary" type="button" onclick="mobileToolAction('sticky')"><strong>▣</strong><span>Sticky</span><small>Miro note</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('text')"><strong>T</strong><span>Text</span><small>Rich text</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('image')"><strong>□</strong><span>Image</span><small>Upload/photo</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('comment')"><strong>☰</strong><span>Comment</span><small>Thread</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('marker')"><strong>━</strong><span>Marker</span><small>Highlight</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('eraser')"><strong>⌫</strong><span>Eraser</span><small>Clean strokes</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('connect')"><strong>↔</strong><span>Connect</span><small>Cards</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('fit')"><strong>⌖</strong><span>Fit</span><small>See all</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('share')"><strong>↗</strong><span>Share</span><small>Invite</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('undo')"><strong>↶</strong><span>Undo</span><small>Back</small></button>
+    <button class="mobile-tool-item" type="button" onclick="mobileToolAction('redo')"><strong>↷</strong><span>Redo</span><small>Again</small></button>
+    <button class="mobile-tool-item danger" type="button" onclick="mobileToolAction('eraseAll')"><strong>×</strong><span>Clear ink</span><small>Strokes</small></button>
+  </div>
 </div>
 
 <!-- Hidden zoom buttons for JS compatibility -->
@@ -7118,6 +7188,8 @@ function toggleConnectMode() {
   // Sync toolbar buttons explicitly
   document.querySelectorAll('.mt-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(enabling ? 'mt-connect' : 'mt-select')?.classList.add('active');
+  syncMobileQuickbar(enabling ? 'connect' : 'select');
+  closeMobileToolSheet();
 }
 
 /* ─── Comment mode ─── */
@@ -7131,6 +7203,8 @@ function toggleCommentMode() {
     boardWrap.classList.add('commenting');
     document.querySelectorAll('.mt-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('mt-comment')?.classList.add('active');
+    syncMobileQuickbar('comment');
+    closeMobileToolSheet();
     toast && toast('Click the board to add a comment');
   }
 }
@@ -7140,6 +7214,7 @@ function disableCommentMode() {
   document.getElementById('mt-comment')?.classList.remove('active');
   document.getElementById('mt-select')?.classList.add('active');
   hideBoardCommentComposer();
+  syncMobileQuickbar('select');
 }
 
 let _commentComposerBoardPos = null;
@@ -10422,6 +10497,8 @@ function enterPlaceMode(type, extraData) {
   _placeGhost.innerHTML = `<span style="font-size:15px;line-height:1;">${info.icon}</span><span>${info.label}</span>`;
   document.body.appendChild(_placeGhost);
   requestAnimationFrame(() => { if (_placeGhost) _placeGhost.style.opacity = '1'; });
+  syncMobileQuickbar(type);
+  closeMobileToolSheet();
 }
 
 function cancelPlaceMode() {
@@ -10514,7 +10591,69 @@ function setMiroTool(tool) {
   document.querySelectorAll('.mt-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('mt-' + tool);
   if (btn) btn.classList.add('active');
+  syncMobileQuickbar(tool);
+  if (tool === 'select') closeMobileToolSheet();
 }
+
+function syncMobileQuickbar(tool) {
+  const current = tool || _drawTool || _miroTool || 'select';
+  document.querySelectorAll('#mobile-quickbar .mq-btn').forEach(btn => btn.classList.remove('active'));
+  const map = {
+    select: 'mq-select',
+    pen: 'mq-pen',
+    marker: 'mq-pen',
+    eraser: 'mq-pen',
+    comment: 'mq-comment',
+    sticky: 'mq-add',
+    text: 'mq-add',
+    image: 'mq-add',
+  };
+  const id = map[current] || (['shape','lesson','assignment','vocab','checklist','timer','frame'].includes(current) ? 'mq-add' : '');
+  if (id) document.getElementById(id)?.classList.add('active');
+}
+
+function openMobileToolSheet() {
+  const sheet = document.getElementById('mobile-tool-sheet');
+  if (!sheet) return;
+  sheet.classList.add('show');
+  document.body.classList.add('mobile-tool-sheet-open');
+  if (navigator.vibrate) navigator.vibrate(6);
+}
+
+function closeMobileToolSheet() {
+  const sheet = document.getElementById('mobile-tool-sheet');
+  if (sheet) sheet.classList.remove('show');
+  document.body.classList.remove('mobile-tool-sheet-open');
+}
+
+function toggleMobileToolSheet() {
+  const sheet = document.getElementById('mobile-tool-sheet');
+  if (sheet?.classList.contains('show')) closeMobileToolSheet();
+  else openMobileToolSheet();
+}
+
+function mobileToolAction(action) {
+  if (navigator.vibrate) navigator.vibrate(8);
+  if (action === 'sticky' && typeof toolbarQuickAdd === 'function') toolbarQuickAdd('sticky');
+  else if (action === 'text' && typeof toolbarQuickAdd === 'function') toolbarQuickAdd('text');
+  else if (action === 'image') { closeMobileToolSheet(); if (typeof toolbarOpenModal === 'function') toolbarOpenModal('image'); }
+  else if (action === 'comment') { closeMobileToolSheet(); toggleCommentMode(); }
+  else if (action === 'marker') { closeMobileToolSheet(); toggleDrawTool && toggleDrawTool('marker'); }
+  else if (action === 'eraser') { closeMobileToolSheet(); toggleDrawTool && toggleDrawTool('eraser'); }
+  else if (action === 'connect') { closeMobileToolSheet(); toggleConnectMode(); syncMobileQuickbar('connect'); }
+  else if (action === 'fit') { closeMobileToolSheet(); document.getElementById('btn-fit')?.click(); }
+  else if (action === 'share') { closeMobileToolSheet(); openSharePanel(); }
+  else if (action === 'undo') { closeMobileToolSheet(); if (typeof undo === 'function') undo(); }
+  else if (action === 'redo') { closeMobileToolSheet(); if (typeof redo === 'function') redo(); }
+  else if (action === 'eraseAll') { closeMobileToolSheet(); if (typeof eraseDrawing === 'function') eraseDrawing(); }
+}
+
+document.addEventListener('click', e => {
+  const sheet = document.getElementById('mobile-tool-sheet');
+  if (!sheet?.classList.contains('show')) return;
+  if (e.target.closest('#mobile-tool-sheet,#mq-add')) return;
+  closeMobileToolSheet();
+}, true);
 
 // Update miro toolbar position when sidebar toggles
 function updateMiroToolbarPos() {
@@ -11986,6 +12125,7 @@ function disableDrawTool() {
     _miroTool = 'select';
     document.getElementById('mt-select')?.classList.add('active');
   }
+  syncMobileQuickbar('select');
 }
 
 function toggleDrawTool(tool, ev) {
@@ -11998,6 +12138,7 @@ function toggleDrawTool(tool, ev) {
     disableDrawTool();
     document.querySelectorAll('.mt-btn').forEach(b => b.classList.remove('active'));
     const sel = document.getElementById('mt-select'); if (sel) sel.classList.add('active');
+    syncMobileQuickbar('select');
     return;
   }
   _drawTool = tool;
@@ -12009,6 +12150,8 @@ function toggleDrawTool(tool, ev) {
   const btn = document.getElementById('mt-' + tool);
   if (btn) btn.classList.add('active');
   closeDrawPalette();
+  syncMobileQuickbar(tool);
+  closeMobileToolSheet();
 }
 function eraseDrawing() {
   if (!(state.strokes && state.strokes.length)) return;

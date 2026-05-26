@@ -1,4 +1,4 @@
-const CACHE = 'teachedos-v48';
+const CACHE = 'teachedos-v49';
 const BASE_PATH = new URL(self.registration.scope).pathname;
 const base = path => new URL(path, self.registration.scope).pathname;
 
@@ -29,6 +29,7 @@ const SHELL = [
   'styles/main.css',
   'styles/games-base.css',
   'styles/mobile-pro.css',
+  'styles/mobile-unified.css',
   'styles/mobile-guard.css',
   'styles/harmony.css',
   'styles/unify.css',

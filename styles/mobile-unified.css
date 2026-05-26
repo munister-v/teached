@@ -57,7 +57,7 @@
     --safe-left:   env(safe-area-inset-left, 0px);
     --safe-right:  env(safe-area-inset-right, 0px);
     /* Standard bottom nav height used everywhere */
-    --mob-nav-h:   60px;
+    --mob-nav-h:   64px;
     --mob-content-pb: calc(var(--mob-nav-h) + var(--safe-bottom) + 12px);
   }
 
