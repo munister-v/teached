@@ -6953,6 +6953,11 @@ function isBoardTypingTarget(target) {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   return !!target.closest?.('[contenteditable],input,textarea,select,.text-format-toolbar,.note-body,.layer-popover');
 }
+function boardShortcut(e, letter) {
+  const key = String(e.key || '').toLowerCase();
+  const code = String(e.code || '').toLowerCase();
+  return key === letter || code === `key${letter}`;
+}
 
 document.addEventListener('pointerdown', e => {
   const btn = e.target.closest?.('.mt-btn[data-tip]');
@@ -6974,20 +6979,20 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); return;
   }
 
-  if ((e.ctrlKey||e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
-  if ((e.ctrlKey||e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 's') { e.preventDefault(); forceSave(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'a') { e.preventDefault(); state.cards.forEach(c => selectCard(c.id)); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
-  const shortcutKey = String(e.key || '').toLowerCase();
-  if ((e.ctrlKey||e.metaKey) && shortcutKey === 'c' && !e.shiftKey) {
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'z') && !e.shiftKey) { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey||e.metaKey) && (boardShortcut(e, 'y') || (boardShortcut(e, 'z') && e.shiftKey))) { e.preventDefault(); redo(); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 's')) { e.preventDefault(); forceSave(); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'a')) { e.preventDefault(); state.cards.forEach(c => selectCard(c.id)); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'd')) { e.preventDefault(); duplicateSelected(); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'c') && !e.shiftKey) {
     if (state.selected.size) {
       e.preventDefault();
       copySelectedCards();
     }
     return;
   }
-  if ((e.ctrlKey||e.metaKey) && shortcutKey === 'v' && !e.shiftKey) {
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'v') && !e.shiftKey) {
+    e.preventDefault();
     // Read immediately while the Cmd/Ctrl+V user activation is still alive.
     pasteFromClipboardShortcut();
     focusBoardClipboardCatcher();
@@ -6995,10 +7000,10 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ((e.ctrlKey||e.metaKey) && e.key === '0') { state.scale=1; state.pan={x:100,y:60}; applyTransform(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'f') { e.preventDefault(); toggleBoardSearch(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'h') { e.preventDefault(); openVersionHistory(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'g' && !e.shiftKey) { e.preventDefault(); groupSelected(); return; }
-  if ((e.ctrlKey||e.metaKey) && e.key === 'g' && e.shiftKey)  { e.preventDefault(); ungroupSelected(); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'f')) { e.preventDefault(); toggleBoardSearch(); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'h')) { e.preventDefault(); openVersionHistory(); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'g') && !e.shiftKey) { e.preventDefault(); groupSelected(); return; }
+  if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'g') && e.shiftKey)  { e.preventDefault(); ungroupSelected(); return; }
 
   if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
   if (e.key === 'Escape') {
@@ -11725,10 +11730,15 @@ async function copyImageCardToSystemClipboard(card) {
 }
 
 async function pasteFromAsyncClipboard() {
-  if (_asyncClipboardPasteInFlight || !navigator.clipboard?.read) return false;
+  if (_asyncClipboardPasteInFlight) return false;
+  if (!navigator.clipboard?.read) {
+    toast && toast('Clipboard image read is blocked in this browser. Trying text/URL...');
+    return false;
+  }
   _asyncClipboardPasteInFlight = true;
   try {
     const items = await navigator.clipboard.read();
+    const availableTypes = items.flatMap(item => item.types || []).join(', ');
     for (const item of items) {
       const imageType = item.types.find(type => clipboardTypeToImageMime(type));
       if (!imageType) continue;
@@ -11756,9 +11766,11 @@ async function pasteFromAsyncClipboard() {
         return true;
       }
     }
+    if (availableTypes) toast && toast(`Clipboard types: ${availableTypes}`);
   } catch (err) {
     // Browser may deny async clipboard reads; the regular paste event still covers most cases.
     console.warn('Async clipboard image paste failed', err);
+    toast && toast(`Clipboard blocked: ${err.name || 'error'}`);
   } finally {
     _asyncClipboardPasteInFlight = false;
   }
@@ -11782,6 +11794,7 @@ async function pasteFromClipboardTextFallback() {
 
 function pasteFromClipboardShortcut() {
   const startedAt = performance.now();
+  toast && toast('Reading clipboard...');
   pasteFromAsyncClipboard()
     .then(ok => ok || pasteFromClipboardTextFallback())
     .then(ok => {
