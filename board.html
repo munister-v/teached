@@ -2591,6 +2591,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
     <div class="user-menu-item" onclick="toggleBoardSearch();toggleMoreMenu()">🔍 Search cards <span style="margin-left:auto;font-size:10px;color:var(--text-3);font-family:monospace;">Ctrl+F</span></div>
     <div class="user-menu-item" onclick="toggleSnap();toggleMoreMenu()" id="snap-menu-item">⊞ Snap to grid</div>
     <div class="user-menu-item" onclick="openBgModal();toggleMoreMenu()">🎨 Background color / image</div>
+    <div class="user-menu-item" onclick="pasteFromClipboardButton();toggleMoreMenu()">📋 Paste image from clipboard</div>
     <div class="user-menu-item" id="more-export-board" onclick="openExportMenu(event);toggleMoreMenu()">⬇ Export board</div>
     <div class="user-menu-item" onclick="openShortcuts();toggleMoreMenu()">⌨ Keyboard shortcuts</div>
     <div style="height:1px;background:var(--border);margin:4px 0;"></div>
@@ -2616,6 +2617,10 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   <button class="mq-btn" type="button" id="mq-comment" onclick="toggleCommentMode()" aria-label="Add comment">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3h10v7H7l-4 3z"/></svg>
     <span>Comment</span>
+  </button>
+  <button class="mq-btn" type="button" id="mq-paste" onclick="pasteFromClipboardButton()" aria-label="Paste image from clipboard">
+    <span style="font-size:16px;line-height:1" aria-hidden="true">📋</span>
+    <span>Paste</span>
   </button>
   <button class="mq-btn ghost" type="button" onclick="toggleMoreMenu()" aria-label="More actions">
     <span style="font-size:18px;line-height:1" aria-hidden="true">⋯</span>
@@ -2745,6 +2750,9 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   <!-- 12. + Add (more) -->
   <button class="mt-btn mt-add" id="mt-add" data-tip="More tools" onclick="setSidebarTab('elements')">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+  </button>
+  <button class="mt-btn" id="mt-paste" data-tip="Paste image from clipboard" onclick="pasteFromClipboardButton()">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h6"/><path d="M6 2h4l1 2H5l1-2z"/><rect x="3" y="4" width="10" height="10" rx="1.5"/><path d="M6 8h4M8 6v4"/></svg>
   </button>
   <div class="mt-sep"></div>
   <!-- 13. Undo -->
@@ -6958,6 +6966,17 @@ function boardShortcut(e, letter) {
   const code = String(e.code || '').toLowerCase();
   return key === letter || code === `key${letter}`;
 }
+function handleBoardPasteShortcut(e) {
+  if (e.__teachedPasteShortcutSeen) return false;
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || !boardShortcut(e, 'v')) return false;
+  if (isBoardTypingTarget(e.target)) return false;
+  e.__teachedPasteShortcutSeen = true;
+  e.preventDefault();
+  pasteFromClipboardShortcut();
+  focusBoardClipboardCatcher();
+  scheduleAsyncClipboardPasteFallback();
+  return true;
+}
 
 document.addEventListener('pointerdown', e => {
   const btn = e.target.closest?.('.mt-btn[data-tip]');
@@ -6967,8 +6986,11 @@ document.addEventListener('pointerdown', e => {
   window.setTimeout(() => btn.classList.remove('tip-suppressed'), 450);
 }, true);
 
+window.addEventListener('keydown', handleBoardPasteShortcut, true);
+
 document.addEventListener('keydown', e => {
   if (isBoardTypingTarget(e.target)) return;
+  if (e.__teachedPasteShortcutSeen) return;
   // Space = pan
   if (e.code === 'Space') {
     if (!spaceDown) {
@@ -6992,11 +7014,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'v') && !e.shiftKey) {
-    e.preventDefault();
-    // Read immediately while the Cmd/Ctrl+V user activation is still alive.
-    pasteFromClipboardShortcut();
-    focusBoardClipboardCatcher();
-    scheduleAsyncClipboardPasteFallback();
+    handleBoardPasteShortcut(e);
     return;
   }
   if ((e.ctrlKey||e.metaKey) && e.key === '0') { state.scale=1; state.pan={x:100,y:60}; applyTransform(); return; }
@@ -11795,17 +11813,40 @@ async function pasteFromClipboardTextFallback() {
 function pasteFromClipboardShortcut() {
   const startedAt = performance.now();
   toast && toast('Reading clipboard...');
-  pasteFromAsyncClipboard()
+  return pasteFromAsyncClipboard()
     .then(ok => ok || pasteFromClipboardTextFallback())
     .then(ok => {
-      if (ok) return;
+      if (ok) return true;
       if (performance.now() - _lastPasteHandledAt < 500 || _lastPasteHandledAt >= startedAt) return;
-      window.setTimeout(() => {
-        if (inspectBoardClipboardCatcherForImage()) return;
-        if (_cardClipboard.length && performance.now() - _lastPasteHandledAt > 500) pasteCards();
-      }, 120);
+      return new Promise(resolve => {
+        window.setTimeout(() => {
+          if (inspectBoardClipboardCatcherForImage()) { resolve(true); return; }
+          if (_cardClipboard.length && performance.now() - _lastPasteHandledAt > 500) { pasteCards(); resolve(true); return; }
+          resolve(false);
+        }, 120);
+      });
     });
 }
+
+function pasteFromClipboardButton() {
+  pasteFromClipboardShortcut().then(ok => {
+    if (ok) return;
+    toast && toast('No readable image in clipboard. Try copying the image itself or drag it onto the board.');
+  });
+}
+
+function handleBoardClipboardCatcherInput(e) {
+  if (e.target?.id !== 'board-clipboard-catcher') return;
+  window.setTimeout(() => {
+    if (inspectBoardClipboardCatcherForImage()) return;
+    cleanupBoardClipboardCatcher();
+  }, 120);
+}
+
+document.addEventListener('beforeinput', e => {
+  if (e.inputType === 'insertFromPaste') handleBoardClipboardCatcherInput(e);
+}, true);
+document.addEventListener('input', handleBoardClipboardCatcherInput, true);
 
 function scheduleAsyncClipboardPasteFallback() {
   const startedAt = performance.now();
