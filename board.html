@@ -2008,7 +2008,11 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .ai-form textarea{min-height:82px;resize:vertical;}
 .ai-form input:focus,.ai-form select:focus,.ai-form textarea:focus{border-color:#caff32;box-shadow:0 0 0 4px rgba(202,255,50,.22);}
 .ai-form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.ai-provider-note{margin-top:10px;border-radius:14px;background:#111018;color:rgba(255,255,255,.78);padding:11px 12px;font-size:12px;line-height:1.45;font-weight:650;}
+.ai-memory-note{margin-top:10px;border-radius:14px;background:#111018;color:rgba(255,255,255,.78);padding:11px 12px;font-size:12px;line-height:1.45;font-weight:650;}
+.ai-memory-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.ai-memory-chip{border:1px solid rgba(17,24,39,.10);background:#fff;border-radius:999px;padding:7px 10px;
+  font-size:11px;font-weight:900;color:#171420;cursor:pointer;}
+.ai-memory-chip.active{background:#caff32;border-color:#caff32;}
 .ai-preview{background:#111018;color:#fff;border-radius:20px;padding:18px;min-height:320px;box-shadow:0 16px 42px rgba(17,16,24,.18);}
 .ai-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .ai-preview-title{font-size:17px;font-weight:950;letter-spacing:-.02em;}
@@ -3079,28 +3083,19 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   <div class="ai-box">
     <button class="ai-close" onclick="closeAiAssistantPanel()" aria-label="Close AI assistant">×</button>
     <div class="ai-hero">
-      <div class="ai-kicker">AI assistant studio</div>
-      <h2>Generate a lesson flow now, connect free APIs <em>when ready.</em></h2>
-      <p>Local mode works without keys or payments. Gemini, OpenRouter and Groq are prepared as bring-your-own-key providers for testing; on VPS we will move keys to a safe backend proxy.</p>
+      <div class="ai-kicker">AI memory studio</div>
+      <h2>Generate lesson boards from your <em>teaching memory.</em></h2>
+      <p>No keys, no payments, no external calls. The assistant remembers teacher style, class profile, common mistakes and preferred activities directly in this browser.</p>
       <div class="ai-chip-row">
-        <span class="ai-chip">Free local mode</span>
-        <span class="ai-chip">BYO API key</span>
-        <span class="ai-chip">Selected-card actions</span>
+        <span class="ai-chip">100% local</span>
+        <span class="ai-chip">Teacher memory</span>
+        <span class="ai-chip">Student profile</span>
+        <span class="ai-chip">Mistake-aware</span>
         <span class="ai-chip">Apply to board</span>
-        <span class="ai-chip">Admin quotas</span>
       </div>
     </div>
     <div class="ai-builder">
       <div class="ai-form">
-        <label for="ai-provider">Provider</label>
-        <select id="ai-provider">
-          <option value="local">Local templates · free</option>
-          <option value="gemini">Gemini API · free tier / BYO key</option>
-          <option value="openrouter">OpenRouter · free models / BYO key</option>
-          <option value="groq">Groq · free tier / BYO key</option>
-        </select>
-        <label for="ai-api-key">API key</label>
-        <input id="ai-api-key" type="password" placeholder="Optional. Stored only in this browser for testing.">
         <div class="ai-form-row">
           <div>
             <label for="ai-level">Level</label>
@@ -3129,15 +3124,36 @@ body.board-dragging .board-card{will-change:transform,left,top;}
             </select>
           </div>
         </div>
+        <label for="ai-mode">Output mode</label>
+        <select id="ai-mode">
+          <option value="lesson-board" selected>Full lesson board</option>
+          <option value="quick-activities">Quick activities only</option>
+          <option value="homework-pack">Homework pack</option>
+          <option value="mistake-clinic">Mistake clinic</option>
+          <option value="game-pack">Game pack</option>
+        </select>
         <label for="ai-topic">Topic / goal</label>
         <input id="ai-topic" value="Writing lesson: essay structure and strong arguments">
+        <label for="ai-teacher-memory">Teacher memory</label>
+        <textarea id="ai-teacher-memory" placeholder="Your style: strict/fun, correction style, preferred flow, favorite activities..."></textarea>
+        <label for="ai-student-memory">Student / class memory</label>
+        <textarea id="ai-student-memory" placeholder="Student interests, weak spots, goals, age, motivation, timezone/context..."></textarea>
+        <label for="ai-mistakes">Common mistakes to target</label>
+        <textarea id="ai-mistakes" placeholder="e.g. articles, word order, weak arguments, past tenses, pronunciation..."></textarea>
         <label for="ai-source">Source text / teacher notes</label>
         <textarea id="ai-source" placeholder="Paste text, vocabulary, student mistakes, exam task, article or lesson idea..."></textarea>
-        <div class="ai-provider-note" id="ai-provider-note">Local mode is instant and free. API providers are prepared for testing with your own key; production should use the VPS backend proxy.</div>
+        <div class="ai-memory-row" id="ai-memory-presets">
+          <button class="ai-memory-chip" type="button" onclick="toggleAiMemoryPreset(this,'More speaking time, less teacher talk. Add pair work and reflection.')">Speaking-heavy</button>
+          <button class="ai-memory-chip" type="button" onclick="toggleAiMemoryPreset(this,'Student needs gentle correction and confidence-building tasks.')">Gentle correction</button>
+          <button class="ai-memory-chip" type="button" onclick="toggleAiMemoryPreset(this,'Add exam-style timing, rubrics and self-check criteria.')">Exam mode</button>
+          <button class="ai-memory-chip" type="button" onclick="toggleAiMemoryPreset(this,'Use games, movement, visuals and short task cycles.')">Game energy</button>
+        </div>
+        <div class="ai-memory-note" id="ai-memory-note">Memory is saved only on this device. The next generated board will adapt to your notes, mistakes and selected mode.</div>
         <div class="ai-action-row">
           <button class="ai-action" onclick="runAiAssistant()">Generate preview</button>
           <button class="ai-action secondary" onclick="applyAiAssistantToBoard()">Apply to board</button>
-          <button class="ai-action ghost" onclick="saveAiAssistantSettings()">Save provider</button>
+          <button class="ai-action ghost" onclick="saveAiAssistantSettings()">Save memory</button>
+          <button class="ai-action ghost" onclick="clearAiAssistantMemory()">Clear memory</button>
         </div>
         <div class="ai-status" id="ai-status"></div>
       </div>
@@ -3152,8 +3168,8 @@ body.board-dragging .board-card{will-change:transform,left,top;}
       </div>
     </div>
     <div class="ai-grid">
-      <div class="ai-card"><h3>Free-first approach</h3><p>Local templates create useful boards even without any external AI. Free APIs are optional accelerators, not a dependency.</p></div>
-      <div class="ai-card"><h3>Next backend step</h3><p>On VPS we add `/api/ai/*`, hide keys server-side, add tariff quotas and admin approval controls.</p></div>
+      <div class="ai-card"><h3>Memory-first approach</h3><p>The assistant becomes better when you save teacher style, class profile, target mistakes and preferred activity rhythm.</p></div>
+      <div class="ai-card"><h3>No-key principle</h3><p>Everything here runs locally. Later we can add server AI, but the product should stay useful even without paid APIs.</p></div>
     </div>
   </div>
 </div>
@@ -11328,57 +11344,69 @@ let _lastAiAssistantResult = null;
 function loadAiAssistantSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(AI_ASSISTANT_STORAGE) || '{}');
-    if (saved.provider) document.getElementById('ai-provider').value = saved.provider;
-    if (saved.apiKey) document.getElementById('ai-api-key').value = saved.apiKey;
+    if (saved.teacherMemory) document.getElementById('ai-teacher-memory').value = saved.teacherMemory;
+    if (saved.studentMemory) document.getElementById('ai-student-memory').value = saved.studentMemory;
+    if (saved.mistakes) document.getElementById('ai-mistakes').value = saved.mistakes;
+    if (saved.mode) document.getElementById('ai-mode').value = saved.mode;
   } catch {}
 }
 
 function saveAiAssistantSettings() {
-  const provider = document.getElementById('ai-provider')?.value || 'local';
-  const apiKey = document.getElementById('ai-api-key')?.value || '';
-  localStorage.setItem(AI_ASSISTANT_STORAGE, JSON.stringify({ provider, apiKey }));
+  const payload = {
+    teacherMemory: document.getElementById('ai-teacher-memory')?.value || '',
+    studentMemory: document.getElementById('ai-student-memory')?.value || '',
+    mistakes: document.getElementById('ai-mistakes')?.value || '',
+    mode: document.getElementById('ai-mode')?.value || 'lesson-board',
+  };
+  localStorage.setItem(AI_ASSISTANT_STORAGE, JSON.stringify(payload));
   updateAiProviderNote();
-  toast('AI provider saved locally');
+  toast('AI memory saved');
 }
 
 function updateAiProviderNote() {
-  const provider = document.getElementById('ai-provider')?.value || 'local';
-  const note = document.getElementById('ai-provider-note');
+  const note = document.getElementById('ai-memory-note');
   if (!note) return;
-  const copy = {
-    local: 'Local mode is instant and free. It uses teacher templates in the browser, so it works offline and never sends lesson data out.',
-    gemini: 'Gemini can be tested with a free-tier API key from Google AI Studio. For production, move the key to the VPS backend proxy.',
-    openrouter: 'OpenRouter has free community models. Availability changes by model, so the VPS proxy should handle model fallback.',
-    groq: 'Groq has fast free-tier inference for supported models. Use BYO key for tests, then proxy it through VPS for real users.',
-  };
-  note.textContent = copy[provider] || copy.local;
+  const saved = JSON.parse(localStorage.getItem(AI_ASSISTANT_STORAGE) || '{}');
+  const count = ['teacherMemory','studentMemory','mistakes'].filter(k => String(saved[k] || '').trim()).length;
+  note.textContent = count
+    ? `Memory active: ${count}/3 blocks saved. Generated boards will adapt to your teaching style.`
+    : 'Memory is saved only on this device. The next generated board will adapt to your notes, mistakes and selected mode.';
 }
-document.getElementById('ai-provider')?.addEventListener('change', updateAiProviderNote);
+
+function clearAiAssistantMemory() {
+  localStorage.removeItem(AI_ASSISTANT_STORAGE);
+  ['ai-teacher-memory','ai-student-memory','ai-mistakes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.querySelectorAll('#ai-memory-presets .ai-memory-chip').forEach(btn => btn.classList.remove('active'));
+  updateAiProviderNote();
+  toast('AI memory cleared');
+}
+
+function toggleAiMemoryPreset(btn, text) {
+  btn?.classList.toggle('active');
+  const target = document.getElementById('ai-teacher-memory');
+  if (!target) return;
+  const current = target.value.trim();
+  if (btn?.classList.contains('active')) {
+    target.value = current ? `${current}\n${text}` : text;
+  } else {
+    target.value = current.split('\n').filter(line => line.trim() !== text).join('\n');
+  }
+}
 
 function getAiAssistantInput() {
   return {
-    provider: document.getElementById('ai-provider')?.value || 'local',
-    apiKey: document.getElementById('ai-api-key')?.value.trim() || '',
+    provider: 'local-memory',
+    mode: document.getElementById('ai-mode')?.value || 'lesson-board',
     level: document.getElementById('ai-level')?.value || 'B1',
     duration: document.getElementById('ai-duration')?.value || '45 min',
     skill: document.getElementById('ai-skill')?.value || 'Writing',
     audience: document.getElementById('ai-audience')?.value || 'Teens',
     topic: document.getElementById('ai-topic')?.value.trim() || 'A practical English lesson',
+    teacherMemory: document.getElementById('ai-teacher-memory')?.value.trim() || '',
+    studentMemory: document.getElementById('ai-student-memory')?.value.trim() || '',
+    mistakes: document.getElementById('ai-mistakes')?.value.trim() || '',
     source: document.getElementById('ai-source')?.value.trim() || '',
   };
-}
-
-function buildAiAssistantPrompt(input) {
-  return [
-    'Create a teacher-ready ESL lesson plan as compact JSON.',
-    'Return keys: title, summary, stages[{time,title,goal,activity}], vocabulary[], homework.',
-    `Level: ${input.level}`,
-    `Duration: ${input.duration}`,
-    `Skill: ${input.skill}`,
-    `Audience: ${input.audience}`,
-    `Topic: ${input.topic}`,
-    input.source ? `Teacher notes/source: ${input.source}` : '',
-  ].filter(Boolean).join('\n');
 }
 
 function generateLocalAiLesson(input) {
@@ -11403,66 +11431,51 @@ function generateLocalAiLesson(input) {
     .split(/\s+/)
     .filter(w => w.length > 3)
     .slice(0, 8);
-  const vocabulary = [...new Set(words.length ? words : ['claim','reason','example','contrast','conclusion'])];
+  const memoryWords = `${input.teacherMemory} ${input.studentMemory} ${input.mistakes} ${input.source}`
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 4)
+    .slice(0, 12);
+  const mistakeItems = input.mistakes
+    .split(/[,;\n]/)
+    .map(x => x.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const vocabulary = [...new Set([...(words.length ? words : ['claim','reason','example','contrast','conclusion']), ...memoryWords].slice(0, 10))];
+  const memoryHints = [
+    input.teacherMemory ? `Teacher style: ${input.teacherMemory}` : '',
+    input.studentMemory ? `Class profile: ${input.studentMemory}` : '',
+    mistakeItems.length ? `Target mistakes: ${mistakeItems.join(', ')}` : '',
+  ].filter(Boolean);
+  const modeAddons = {
+    'quick-activities': ['Fast opener', 'One board game', 'Exit ticket'],
+    'homework-pack': ['Homework brief', 'Answer criteria', 'Self-check'],
+    'mistake-clinic': ['Mistake diagnosis', 'Correction ladder', 'Personal rewrite'],
+    'game-pack': ['Matching game', 'Sorting game', 'Challenge round'],
+    'lesson-board': ['Warm-up', 'Input', 'Practice', 'Production', 'Reflection'],
+  }[input.mode] || [];
+  const adaptedNote = memoryHints.length
+    ? ` Adapted from memory: ${memoryHints.join(' · ')}.`
+    : ' Add memory notes to make the next board more personalised.';
   return {
     provider: input.provider,
+    mode: input.mode,
     title: `${input.level} ${input.skill}: ${cleanTopic}`,
-    summary: `${input.duration} lesson for ${input.audience.toLowerCase()} with a clear flow, reusable board cards and homework.`,
+    summary: `${input.duration} ${input.mode.replace('-', ' ')} for ${input.audience.toLowerCase()} with reusable cards, homework and teacher control.${adaptedNote}`,
     stages: [
       { time: `${warm} min`, title: 'Hook + goal', goal: 'Activate context and make the lesson outcome visible.', activity: `Quick board prompt: what makes "${cleanTopic}" useful or difficult? Students add 2 sticky notes.` },
-      { time: `${lead} min`, title: 'Input + noticing', goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Teacher presents a model and students identify ${recipe[0]} patterns with color coding.` },
-      { time: `${practice} min`, title: 'Controlled practice', goal: 'Move from recognition to accurate production.', activity: `Students complete a ${recipe[1]} task, then compare answers and correct one common mistake.` },
-      { time: `${output} min`, title: 'Freer task', goal: 'Use the target language in a realistic classroom product.', activity: `Pairs complete a ${recipe[2]} task and upgrade it using a mini-checklist.` },
+      { time: `${lead} min`, title: 'Input + noticing', goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Teacher presents a model and students identify ${recipe[0]} patterns with color coding.${mistakeItems[0] ? ' Watch for: ' + mistakeItems[0] + '.' : ''}` },
+      { time: `${practice} min`, title: 'Controlled practice', goal: 'Move from recognition to accurate production.', activity: `Students complete a ${recipe[1]} task, then compare answers and correct one common mistake.${mistakeItems[1] ? ' Include contrast with: ' + mistakeItems[1] + '.' : ''}` },
+      { time: `${output} min`, title: input.mode === 'game-pack' ? 'Game challenge' : 'Freer task', goal: 'Use the target language in a realistic classroom product.', activity: `Pairs complete a ${recipe[2]} task and upgrade it using a mini-checklist.${input.studentMemory ? ' Personalise examples from class memory.' : ''}` },
       { time: `${reflect} min`, title: 'Reflection + homework', goal: 'Lock in progress and set the next step.', activity: `Students choose one phrase to reuse and receive homework: ${recipe[3]} based on today's board.` },
     ],
     vocabulary,
+    memoryHints,
+    mistakeItems,
+    modeAddons,
+    teacherTip: input.teacherMemory ? 'Keep the saved teacher style visible while correcting: use it as the lesson tone guardrail.' : 'Save teacher memory to make this assistant feel more personal.',
     homework: `Write or record a short response using at least 5 target items from "${cleanTopic}".`,
   };
-}
-
-function tryParseAiJson(text, input) {
-  const raw = String(text || '').trim();
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (match) {
-    try {
-      const data = JSON.parse(match[0]);
-      if (Array.isArray(data.stages)) return { ...generateLocalAiLesson(input), ...data, provider: input.provider };
-    } catch {}
-  }
-  const local = generateLocalAiLesson(input);
-  local.summary = raw || local.summary;
-  return local;
-}
-
-async function callAiProvider(input) {
-  if (!input.apiKey) throw new Error('Add API key or use Local templates');
-  const prompt = buildAiAssistantPrompt(input);
-  if (input.provider === 'gemini') {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(input.apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    });
-    if (!res.ok) throw new Error('Gemini request failed');
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || '';
-  }
-  const endpoint = input.provider === 'groq'
-    ? 'https://api.groq.com/openai/v1/chat/completions'
-    : 'https://openrouter.ai/api/v1/chat/completions';
-  const model = input.provider === 'groq' ? 'llama-3.1-8b-instant' : 'google/gemma-3-27b-it:free';
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${input.apiKey}`,
-      ...(input.provider === 'openrouter' ? { 'HTTP-Referer': location.origin, 'X-Title': 'TeachEd AI Assistant' } : {}),
-    },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: .55 }),
-  });
-  if (!res.ok) throw new Error(`${input.provider} request failed`);
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
 }
 
 function renderAiAssistantPreview(result) {
@@ -11475,6 +11488,7 @@ function renderAiAssistantPreview(result) {
       <h4>${esc(result.title || 'Lesson plan')}</h4>
       <p>${esc(result.summary || '')}</p>
       ${result.vocabulary?.length ? `<ul class="ai-mini-list"><li>${result.vocabulary.map(esc).join('</li><li>')}</li></ul>` : ''}
+      ${result.memoryHints?.length ? `<ul class="ai-mini-list"><li>${result.memoryHints.map(esc).join('</li><li>')}</li></ul>` : ''}
     </div>
     ${(result.stages || []).map(stage => `
       <div class="ai-stage">
@@ -11482,6 +11496,8 @@ function renderAiAssistantPreview(result) {
         <h4>${esc(stage.title || 'Activity')}</h4>
         <p>${esc(stage.activity || '')}</p>
       </div>`).join('')}
+    ${result.modeAddons?.length ? `<div class="ai-stage"><div class="ai-stage-top"><span>Smart extras</span><span>${esc(result.mode || 'lesson')}</span></div><ul class="ai-mini-list"><li>${result.modeAddons.map(esc).join('</li><li>')}</li></ul></div>` : ''}
+    ${result.teacherTip ? `<div class="ai-stage"><div class="ai-stage-top"><span>Teacher tip</span><span>memory</span></div><p>${esc(result.teacherTip)}</p></div>` : ''}
     ${result.homework ? `<div class="ai-stage"><div class="ai-stage-top"><span>Homework</span><span>after class</span></div><p>${esc(result.homework)}</p></div>` : ''}
   `;
 }
@@ -11489,18 +11505,11 @@ function renderAiAssistantPreview(result) {
 async function runAiAssistant() {
   const status = document.getElementById('ai-status');
   const input = getAiAssistantInput();
-  if (status) status.textContent = input.provider === 'local' ? 'Generating local teacher template...' : 'Calling provider. If CORS blocks it, local fallback will be used.';
-  try {
-    const result = input.provider === 'local'
-      ? generateLocalAiLesson(input)
-      : tryParseAiJson(await callAiProvider(input), input);
-    renderAiAssistantPreview(result);
-    if (status) status.textContent = 'Preview ready. You can apply it to the board.';
-  } catch (err) {
-    const fallback = generateLocalAiLesson(input);
-    renderAiAssistantPreview(fallback);
-    if (status) status.textContent = `${err.message}. Local fallback generated instead.`;
-  }
+  if (status) status.textContent = 'Generating from local memory...';
+  saveAiAssistantSettings();
+  const result = generateLocalAiLesson(input);
+  renderAiAssistantPreview(result);
+  if (status) status.textContent = 'Preview ready. No API key needed.';
 }
 
 function applyAiAssistantToBoard() {
@@ -11523,7 +11532,7 @@ function applyAiAssistantToBoard() {
     desc: result.summary || '',
     objectives: (result.stages || []).slice(0, 3).map(s => s.goal || s.title).filter(Boolean),
     attachments: [],
-    notes: 'Generated by TeachEd AI Assistant local/API draft. Review before teaching.',
+    notes: ['Generated by TeachEd AI Assistant local memory mode. Review before teaching.', ...(result.memoryHints || [])].join('\n'),
   });
   (result.stages || []).slice(0, 5).forEach((stage, idx) => {
     const x = center.x - 130 + (idx % 2) * 300;
@@ -11541,6 +11550,18 @@ function applyAiAssistantToBoard() {
       title: 'Target language',
       items: result.vocabulary.slice(0, 8).map(text => ({ text, done: false })),
     }, 250, 230);
+  }
+  if (result.mistakeItems?.length || result.memoryHints?.length) {
+    addCard('note', center.x - 130, center.y + 75, {
+      title: 'AI Memory Notes',
+      text: [...(result.memoryHints || []), ...(result.mistakeItems || []).map(x => 'Mistake focus: ' + x)].join('\n'),
+    }, 270, 190);
+  }
+  if (result.modeAddons?.length) {
+    addCard('checklist', center.x + 460, center.y - 220, {
+      title: 'Smart extras',
+      items: result.modeAddons.map(text => ({ text, done: false })),
+    }, 220, 170);
   }
   if (result.homework) {
     addCard('assignment', center.x + 170, center.y + 75, {
@@ -11574,6 +11595,9 @@ function aiAssistantPreviewText() {
     r.summary,
     ...(r.stages || []).map(s => `${s.time || ''} ${s.title || ''}: ${s.activity || ''}`),
     r.vocabulary?.length ? `Vocabulary: ${r.vocabulary.join(', ')}` : '',
+    r.memoryHints?.length ? `Memory: ${r.memoryHints.join(' | ')}` : '',
+    r.mistakeItems?.length ? `Mistakes: ${r.mistakeItems.join(', ')}` : '',
+    r.teacherTip ? `Teacher tip: ${r.teacherTip}` : '',
     r.homework ? `Homework: ${r.homework}` : '',
   ].filter(Boolean).join('\n\n');
 }

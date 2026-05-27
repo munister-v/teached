@@ -22,17 +22,13 @@ Create a teacher-first AI assistant that helps build boards, lesson flows, exerc
 - Add optional `ai` metadata to generated cards: prompt, source, createdAt, model, confidence.
 - Save reusable prompts/templates in local storage first, then backend when VPS API is ready.
 
-## Backend/API Phase
-- Add `/api/ai/lesson-plan`, `/api/ai/board`, `/api/ai/card`, `/api/ai/game`, `/api/ai/export`.
-- Add usage limits by tariff: free daily requests, pro monthly quota, school team quota.
-- Add admin controls for enabling/disabling AI, reviewing usage and setting manual credits.
-
-## Free/API Provider Strategy
+## No-Key Local Strategy
 - Default mode: local teacher templates with no external API, no keys and no cost.
-- Test mode: bring-your-own-key providers stored only in the teacher browser.
-- Candidate free-tier providers: Gemini API, OpenRouter free models and Groq free-tier models.
-- Production mode: VPS backend proxy stores provider keys server-side, rotates models and enforces tariff quotas.
-- Fallback rule: if an external provider fails, the assistant should still return a local template result.
+- Teacher memory: style, correction approach, preferred activities and pacing.
+- Student memory: age, interests, goals, motivation, class context and weak spots.
+- Mistake memory: recurring grammar, vocabulary, writing, speaking or pronunciation problems.
+- Output modes: full lesson board, quick activities, homework pack, mistake clinic and game pack.
+- Future backend AI should be optional; the product must stay useful without paid APIs.
 
 ## Safety & Quality
 - Always show generated content before inserting.
