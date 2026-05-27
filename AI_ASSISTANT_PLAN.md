@@ -28,6 +28,8 @@ Create a teacher-first AI assistant that helps build boards, lesson flows, exerc
 - Student memory: age, interests, goals, motivation, class context and weak spots.
 - Mistake memory: recurring grammar, vocabulary, writing, speaking or pronunciation problems.
 - Output modes: full lesson board, quick activities, homework pack, mistake clinic and game pack.
+- Context actions: use selected cards, learn from recent board content and apply quick templates.
+- Generated boards should include lesson stages, vocabulary, memory notes, warm-up prompts, success criteria, teacher script and challenge tasks.
 - Future backend AI should be optional; the product must stay useful without paid APIs.
 
 ## Safety & Quality
