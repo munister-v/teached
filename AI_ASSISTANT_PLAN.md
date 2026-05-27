@@ -27,6 +27,13 @@ Create a teacher-first AI assistant that helps build boards, lesson flows, exerc
 - Add usage limits by tariff: free daily requests, pro monthly quota, school team quota.
 - Add admin controls for enabling/disabling AI, reviewing usage and setting manual credits.
 
+## Free/API Provider Strategy
+- Default mode: local teacher templates with no external API, no keys and no cost.
+- Test mode: bring-your-own-key providers stored only in the teacher browser.
+- Candidate free-tier providers: Gemini API, OpenRouter free models and Groq free-tier models.
+- Production mode: VPS backend proxy stores provider keys server-side, rotates models and enforces tariff quotas.
+- Fallback rule: if an external provider fails, the assistant should still return a local template result.
+
 ## Safety & Quality
 - Always show generated content before inserting.
 - Keep sources visible when generation is based on pasted text.

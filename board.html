@@ -1998,11 +1998,35 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .ai-action{border:0;border-radius:14px;background:#caff32;color:#101010;font-weight:950;padding:11px 15px;cursor:pointer;}
 .ai-action.secondary{background:#111018;color:#fff;}
 .ai-action.ghost{background:rgba(17,24,39,.08);color:#171420;}
+.ai-builder{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(320px,1.1fr);gap:16px;margin-top:18px;}
+.ai-form{background:rgba(255,255,255,.82);border:1px solid rgba(17,24,39,.08);border-radius:20px;padding:18px;
+  box-shadow:0 12px 36px rgba(17,24,39,.06);}
+.ai-form label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);
+  font-weight:900;margin:12px 0 6px;}
+.ai-form input,.ai-form select,.ai-form textarea{width:100%;border:1.5px solid rgba(17,24,39,.10);border-radius:13px;
+  background:#fff;color:#171420;padding:11px 12px;font:700 13px/1.35 var(--font);outline:none;}
+.ai-form textarea{min-height:82px;resize:vertical;}
+.ai-form input:focus,.ai-form select:focus,.ai-form textarea:focus{border-color:#caff32;box-shadow:0 0 0 4px rgba(202,255,50,.22);}
+.ai-form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ai-provider-note{margin-top:10px;border-radius:14px;background:#111018;color:rgba(255,255,255,.78);padding:11px 12px;font-size:12px;line-height:1.45;font-weight:650;}
+.ai-preview{background:#111018;color:#fff;border-radius:20px;padding:18px;min-height:320px;box-shadow:0 16px 42px rgba(17,16,24,.18);}
+.ai-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.ai-preview-title{font-size:17px;font-weight:950;letter-spacing:-.02em;}
+.ai-preview-body{display:flex;flex-direction:column;gap:10px;}
+.ai-stage{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:16px;padding:12px;}
+.ai-stage-top{display:flex;justify-content:space-between;gap:10px;color:#caff32;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.08em;}
+.ai-stage h4{margin:7px 0 5px;font-size:15px;color:#fff;}
+.ai-stage p{margin:0;color:rgba(255,255,255,.72);font-size:12px;line-height:1.45;}
+.ai-mini-list{margin:10px 0 0;padding-left:18px;color:rgba(255,255,255,.78);font-size:12px;line-height:1.5;}
+.ai-empty{height:260px;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(255,255,255,.58);font-weight:750;line-height:1.5;}
+.ai-status{font-size:12px;color:var(--text-3);font-weight:750;margin-top:10px;min-height:18px;}
 @media(max-width:760px){
   #ai-assistant-panel{padding:12px;}
   .ai-box{padding:16px;border-radius:22px;}
   .ai-hero{padding:22px;}
   .ai-grid{grid-template-columns:1fr;}
+  .ai-builder{grid-template-columns:1fr;}
+  .ai-form-row{grid-template-columns:1fr;}
 }
 
 /* ══════════════ BOARD SEARCH ══════════════ */
@@ -3055,47 +3079,81 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   <div class="ai-box">
     <button class="ai-close" onclick="closeAiAssistantPanel()" aria-label="Close AI assistant">×</button>
     <div class="ai-hero">
-      <div class="ai-kicker">AI assistant roadmap</div>
-      <h2>Build lessons, boards and games with <em>teacher control.</em></h2>
-      <p>This is the first safe shell for the TeachEd AI assistant. The next implementation phase will connect board context, selected cards, lesson builder, game builder, tariffs and admin limits.</p>
+      <div class="ai-kicker">AI assistant studio</div>
+      <h2>Generate a lesson flow now, connect free APIs <em>when ready.</em></h2>
+      <p>Local mode works without keys or payments. Gemini, OpenRouter and Groq are prepared as bring-your-own-key providers for testing; on VPS we will move keys to a safe backend proxy.</p>
       <div class="ai-chip-row">
-        <span class="ai-chip">Board generator</span>
+        <span class="ai-chip">Free local mode</span>
+        <span class="ai-chip">BYO API key</span>
         <span class="ai-chip">Selected-card actions</span>
-        <span class="ai-chip">Lesson flow</span>
-        <span class="ai-chip">Game builder</span>
+        <span class="ai-chip">Apply to board</span>
         <span class="ai-chip">Admin quotas</span>
       </div>
     </div>
-    <div class="ai-grid">
-      <div class="ai-card">
-        <h3>First release</h3>
-        <ul>
-          <li>Create a board from topic, level, duration and lesson goal.</li>
-          <li>Rewrite, simplify, translate or expand selected text cards.</li>
-          <li>Turn text into vocabulary, questions, gap-fill and matching games.</li>
-        </ul>
+    <div class="ai-builder">
+      <div class="ai-form">
+        <label for="ai-provider">Provider</label>
+        <select id="ai-provider">
+          <option value="local">Local templates · free</option>
+          <option value="gemini">Gemini API · free tier / BYO key</option>
+          <option value="openrouter">OpenRouter · free models / BYO key</option>
+          <option value="groq">Groq · free tier / BYO key</option>
+        </select>
+        <label for="ai-api-key">API key</label>
+        <input id="ai-api-key" type="password" placeholder="Optional. Stored only in this browser for testing.">
+        <div class="ai-form-row">
+          <div>
+            <label for="ai-level">Level</label>
+            <select id="ai-level">
+              <option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option>
+            </select>
+          </div>
+          <div>
+            <label for="ai-duration">Duration</label>
+            <select id="ai-duration">
+              <option>30 min</option><option selected>45 min</option><option>60 min</option><option>90 min</option>
+            </select>
+          </div>
+        </div>
+        <div class="ai-form-row">
+          <div>
+            <label for="ai-skill">Skill</label>
+            <select id="ai-skill">
+              <option>Speaking</option><option>Vocabulary</option><option selected>Writing</option><option>Grammar</option><option>Reading</option><option>Listening</option>
+            </select>
+          </div>
+          <div>
+            <label for="ai-audience">Audience</label>
+            <select id="ai-audience">
+              <option>Adults</option><option selected>Teens</option><option>Kids</option><option>Business</option><option>Exam prep</option>
+            </select>
+          </div>
+        </div>
+        <label for="ai-topic">Topic / goal</label>
+        <input id="ai-topic" value="Writing lesson: essay structure and strong arguments">
+        <label for="ai-source">Source text / teacher notes</label>
+        <textarea id="ai-source" placeholder="Paste text, vocabulary, student mistakes, exam task, article or lesson idea..."></textarea>
+        <div class="ai-provider-note" id="ai-provider-note">Local mode is instant and free. API providers are prepared for testing with your own key; production should use the VPS backend proxy.</div>
+        <div class="ai-action-row">
+          <button class="ai-action" onclick="runAiAssistant()">Generate preview</button>
+          <button class="ai-action secondary" onclick="applyAiAssistantToBoard()">Apply to board</button>
+          <button class="ai-action ghost" onclick="saveAiAssistantSettings()">Save provider</button>
+        </div>
+        <div class="ai-status" id="ai-status"></div>
       </div>
-      <div class="ai-card">
-        <h3>Teacher safety</h3>
-        <ul>
-          <li>Preview before applying anything to the board.</li>
-          <li>Never overwrite or delete cards without confirmation.</li>
-          <li>Save AI output as normal TeachEd cards for manual editing.</li>
-        </ul>
-      </div>
-      <div class="ai-card">
-        <h3>Controls</h3>
-        <p>Language, CEFR level, lesson duration, student age, skill focus and output type will be adjustable before generation.</p>
-      </div>
-      <div class="ai-card">
-        <h3>VPS/API phase</h3>
-        <p>Backend endpoints will handle generation, tariff quotas, admin approvals, usage logs and school/team limits.</p>
+      <div class="ai-preview">
+        <div class="ai-preview-head">
+          <div class="ai-preview-title">Lesson preview</div>
+          <button class="ai-action ghost" onclick="copyAiAssistantPreview()">Copy</button>
+        </div>
+        <div class="ai-preview-body" id="ai-preview-body">
+          <div class="ai-empty">Set topic, level and skill, then generate a teacher-ready flow. Local mode already works without API.</div>
+        </div>
       </div>
     </div>
-    <div class="ai-action-row">
-      <button class="ai-action" onclick="toast('AI assistant plan is ready. API generation comes next.')">Plan ready</button>
-      <button class="ai-action secondary" onclick="closeAiAssistantPanel(); setSidebarTab('elements')">Open tools</button>
-      <button class="ai-action ghost" onclick="setMiroTool('select'); closeAiAssistantPanel()">Back to pointer</button>
+    <div class="ai-grid">
+      <div class="ai-card"><h3>Free-first approach</h3><p>Local templates create useful boards even without any external AI. Free APIs are optional accelerators, not a dependency.</p></div>
+      <div class="ai-card"><h3>Next backend step</h3><p>On VPS we add `/api/ai/*`, hide keys server-side, add tariff quotas and admin approval controls.</p></div>
     </div>
   </div>
 </div>
@@ -11253,6 +11311,8 @@ function openAiAssistantPanel() {
   hideLayerPopover?.();
   closeBoardSearchBar?.();
   closeShortcuts?.();
+  loadAiAssistantSettings();
+  updateAiProviderNote();
   document.getElementById('ai-assistant-panel')?.classList.add('open');
 }
 function closeAiAssistantPanel() {
@@ -11261,6 +11321,274 @@ function closeAiAssistantPanel() {
 document.getElementById('ai-assistant-panel')?.addEventListener('click', e => {
   if (e.target === e.currentTarget) closeAiAssistantPanel();
 });
+
+const AI_ASSISTANT_STORAGE = 'teached.aiAssistant.settings.v1';
+let _lastAiAssistantResult = null;
+
+function loadAiAssistantSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AI_ASSISTANT_STORAGE) || '{}');
+    if (saved.provider) document.getElementById('ai-provider').value = saved.provider;
+    if (saved.apiKey) document.getElementById('ai-api-key').value = saved.apiKey;
+  } catch {}
+}
+
+function saveAiAssistantSettings() {
+  const provider = document.getElementById('ai-provider')?.value || 'local';
+  const apiKey = document.getElementById('ai-api-key')?.value || '';
+  localStorage.setItem(AI_ASSISTANT_STORAGE, JSON.stringify({ provider, apiKey }));
+  updateAiProviderNote();
+  toast('AI provider saved locally');
+}
+
+function updateAiProviderNote() {
+  const provider = document.getElementById('ai-provider')?.value || 'local';
+  const note = document.getElementById('ai-provider-note');
+  if (!note) return;
+  const copy = {
+    local: 'Local mode is instant and free. It uses teacher templates in the browser, so it works offline and never sends lesson data out.',
+    gemini: 'Gemini can be tested with a free-tier API key from Google AI Studio. For production, move the key to the VPS backend proxy.',
+    openrouter: 'OpenRouter has free community models. Availability changes by model, so the VPS proxy should handle model fallback.',
+    groq: 'Groq has fast free-tier inference for supported models. Use BYO key for tests, then proxy it through VPS for real users.',
+  };
+  note.textContent = copy[provider] || copy.local;
+}
+document.getElementById('ai-provider')?.addEventListener('change', updateAiProviderNote);
+
+function getAiAssistantInput() {
+  return {
+    provider: document.getElementById('ai-provider')?.value || 'local',
+    apiKey: document.getElementById('ai-api-key')?.value.trim() || '',
+    level: document.getElementById('ai-level')?.value || 'B1',
+    duration: document.getElementById('ai-duration')?.value || '45 min',
+    skill: document.getElementById('ai-skill')?.value || 'Writing',
+    audience: document.getElementById('ai-audience')?.value || 'Teens',
+    topic: document.getElementById('ai-topic')?.value.trim() || 'A practical English lesson',
+    source: document.getElementById('ai-source')?.value.trim() || '',
+  };
+}
+
+function buildAiAssistantPrompt(input) {
+  return [
+    'Create a teacher-ready ESL lesson plan as compact JSON.',
+    'Return keys: title, summary, stages[{time,title,goal,activity}], vocabulary[], homework.',
+    `Level: ${input.level}`,
+    `Duration: ${input.duration}`,
+    `Skill: ${input.skill}`,
+    `Audience: ${input.audience}`,
+    `Topic: ${input.topic}`,
+    input.source ? `Teacher notes/source: ${input.source}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function generateLocalAiLesson(input) {
+  const minutes = parseInt(input.duration, 10) || 45;
+  const warm = Math.max(5, Math.round(minutes * .12));
+  const lead = Math.max(8, Math.round(minutes * .22));
+  const practice = Math.max(12, Math.round(minutes * .30));
+  const output = Math.max(10, Math.round(minutes * .25));
+  const reflect = Math.max(4, minutes - warm - lead - practice - output);
+  const skillRecipes = {
+    Writing: ['model text noticing', 'argument builder', 'guided paragraph', 'peer upgrade'],
+    Speaking: ['opinion line', 'useful phrases', 'role-play ladder', 'fluency reflection'],
+    Vocabulary: ['meaning from context', 'word families', 'retrieval game', 'personalised sentences'],
+    Grammar: ['guided discovery', 'micro-drills', 'error correction', 'communicative task'],
+    Reading: ['prediction', 'gist scan', 'detail challenge', 'discussion transfer'],
+    Listening: ['prediction', 'first listen gist', 'second listen details', 'speaking transfer'],
+  };
+  const recipe = skillRecipes[input.skill] || skillRecipes.Writing;
+  const cleanTopic = input.topic.replace(/\s+/g, ' ').trim();
+  const words = cleanTopic
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .slice(0, 8);
+  const vocabulary = [...new Set(words.length ? words : ['claim','reason','example','contrast','conclusion'])];
+  return {
+    provider: input.provider,
+    title: `${input.level} ${input.skill}: ${cleanTopic}`,
+    summary: `${input.duration} lesson for ${input.audience.toLowerCase()} with a clear flow, reusable board cards and homework.`,
+    stages: [
+      { time: `${warm} min`, title: 'Hook + goal', goal: 'Activate context and make the lesson outcome visible.', activity: `Quick board prompt: what makes "${cleanTopic}" useful or difficult? Students add 2 sticky notes.` },
+      { time: `${lead} min`, title: 'Input + noticing', goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Teacher presents a model and students identify ${recipe[0]} patterns with color coding.` },
+      { time: `${practice} min`, title: 'Controlled practice', goal: 'Move from recognition to accurate production.', activity: `Students complete a ${recipe[1]} task, then compare answers and correct one common mistake.` },
+      { time: `${output} min`, title: 'Freer task', goal: 'Use the target language in a realistic classroom product.', activity: `Pairs complete a ${recipe[2]} task and upgrade it using a mini-checklist.` },
+      { time: `${reflect} min`, title: 'Reflection + homework', goal: 'Lock in progress and set the next step.', activity: `Students choose one phrase to reuse and receive homework: ${recipe[3]} based on today's board.` },
+    ],
+    vocabulary,
+    homework: `Write or record a short response using at least 5 target items from "${cleanTopic}".`,
+  };
+}
+
+function tryParseAiJson(text, input) {
+  const raw = String(text || '').trim();
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (match) {
+    try {
+      const data = JSON.parse(match[0]);
+      if (Array.isArray(data.stages)) return { ...generateLocalAiLesson(input), ...data, provider: input.provider };
+    } catch {}
+  }
+  const local = generateLocalAiLesson(input);
+  local.summary = raw || local.summary;
+  return local;
+}
+
+async function callAiProvider(input) {
+  if (!input.apiKey) throw new Error('Add API key or use Local templates');
+  const prompt = buildAiAssistantPrompt(input);
+  if (input.provider === 'gemini') {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(input.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    });
+    if (!res.ok) throw new Error('Gemini request failed');
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || '';
+  }
+  const endpoint = input.provider === 'groq'
+    ? 'https://api.groq.com/openai/v1/chat/completions'
+    : 'https://openrouter.ai/api/v1/chat/completions';
+  const model = input.provider === 'groq' ? 'llama-3.1-8b-instant' : 'google/gemma-3-27b-it:free';
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${input.apiKey}`,
+      ...(input.provider === 'openrouter' ? { 'HTTP-Referer': location.origin, 'X-Title': 'TeachEd AI Assistant' } : {}),
+    },
+    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: .55 }),
+  });
+  if (!res.ok) throw new Error(`${input.provider} request failed`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+function renderAiAssistantPreview(result) {
+  _lastAiAssistantResult = result;
+  const body = document.getElementById('ai-preview-body');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="ai-stage">
+      <div class="ai-stage-top"><span>${esc(result.provider || 'local')}</span><span>${esc(result.vocabulary?.length || 0)} vocab</span></div>
+      <h4>${esc(result.title || 'Lesson plan')}</h4>
+      <p>${esc(result.summary || '')}</p>
+      ${result.vocabulary?.length ? `<ul class="ai-mini-list"><li>${result.vocabulary.map(esc).join('</li><li>')}</li></ul>` : ''}
+    </div>
+    ${(result.stages || []).map(stage => `
+      <div class="ai-stage">
+        <div class="ai-stage-top"><span>${esc(stage.time || '')}</span><span>${esc(stage.goal || 'Stage')}</span></div>
+        <h4>${esc(stage.title || 'Activity')}</h4>
+        <p>${esc(stage.activity || '')}</p>
+      </div>`).join('')}
+    ${result.homework ? `<div class="ai-stage"><div class="ai-stage-top"><span>Homework</span><span>after class</span></div><p>${esc(result.homework)}</p></div>` : ''}
+  `;
+}
+
+async function runAiAssistant() {
+  const status = document.getElementById('ai-status');
+  const input = getAiAssistantInput();
+  if (status) status.textContent = input.provider === 'local' ? 'Generating local teacher template...' : 'Calling provider. If CORS blocks it, local fallback will be used.';
+  try {
+    const result = input.provider === 'local'
+      ? generateLocalAiLesson(input)
+      : tryParseAiJson(await callAiProvider(input), input);
+    renderAiAssistantPreview(result);
+    if (status) status.textContent = 'Preview ready. You can apply it to the board.';
+  } catch (err) {
+    const fallback = generateLocalAiLesson(input);
+    renderAiAssistantPreview(fallback);
+    if (status) status.textContent = `${err.message}. Local fallback generated instead.`;
+  }
+}
+
+function applyAiAssistantToBoard() {
+  if (!_lastAiAssistantResult) runAiAssistant().then(applyAiAssistantToBoard);
+  const result = _lastAiAssistantResult;
+  if (!result) return;
+  snapshot();
+  const center = screenToBoard(window.innerWidth * .52, window.innerHeight * .48) || { x: 300, y: 220 };
+  const frame = addCard('frame', center.x - 460, center.y - 260, {
+    title: result.title || 'AI Lesson Flow',
+    bg: 'rgba(202,255,50,.08)',
+    border: 'rgba(236,72,153,.32)',
+  }, 920, 560);
+  const lesson = addCard('lesson', center.x - 430, center.y - 220, {
+    title: result.title || 'AI Lesson',
+    status: 'available',
+    level: document.getElementById('ai-level')?.value || 'B1',
+    skill: document.getElementById('ai-skill')?.value || 'Writing',
+    duration: document.getElementById('ai-duration')?.value || '45 min',
+    desc: result.summary || '',
+    objectives: (result.stages || []).slice(0, 3).map(s => s.goal || s.title).filter(Boolean),
+    attachments: [],
+    notes: 'Generated by TeachEd AI Assistant local/API draft. Review before teaching.',
+  });
+  (result.stages || []).slice(0, 5).forEach((stage, idx) => {
+    const x = center.x - 130 + (idx % 2) * 300;
+    const y = center.y - 220 + Math.floor(idx / 2) * 145;
+    addCard('text', x, y, defaultTextData({
+      text: `${stage.time || ''} · ${stage.title || 'Stage'}\n${stage.activity || ''}`,
+      bgColor: idx % 2 ? 'rgba(202,255,50,.16)' : 'rgba(236,72,153,.12)',
+      textColor: '#15131d',
+      fontFamily: 'var(--font)',
+      align: 'left',
+    }), 260, 112);
+  });
+  if (result.vocabulary?.length) {
+    addCard('checklist', center.x - 430, center.y + 80, {
+      title: 'Target language',
+      items: result.vocabulary.slice(0, 8).map(text => ({ text, done: false })),
+    }, 250, 230);
+  }
+  if (result.homework) {
+    addCard('assignment', center.x + 170, center.y + 75, {
+      title: 'AI Homework',
+      type: 'Mixed',
+      maxScore: 100,
+      deadline: '',
+      desc: result.homework,
+      submitted: 0,
+      total: 0,
+    }, 260, 190);
+  }
+  if (frame?.id && frame.data) {
+    frame.data.childIds = state.cards
+      .filter(c => c.id !== frame.id && c.x >= frame.x && c.y >= frame.y && c.x <= frame.x + frame.w && c.y <= frame.y + frame.h)
+      .map(c => c.id);
+  }
+  clearSelection();
+  if (lesson?.id) selectCard(lesson.id);
+  renderAllArrows?.();
+  scheduleSave(); saveLocal?.();
+  closeAiAssistantPanel();
+  toast('AI lesson flow added to board');
+}
+
+function aiAssistantPreviewText() {
+  const r = _lastAiAssistantResult;
+  if (!r) return '';
+  return [
+    r.title,
+    r.summary,
+    ...(r.stages || []).map(s => `${s.time || ''} ${s.title || ''}: ${s.activity || ''}`),
+    r.vocabulary?.length ? `Vocabulary: ${r.vocabulary.join(', ')}` : '',
+    r.homework ? `Homework: ${r.homework}` : '',
+  ].filter(Boolean).join('\n\n');
+}
+
+async function copyAiAssistantPreview() {
+  if (!_lastAiAssistantResult) await runAiAssistant();
+  const text = aiAssistantPreviewText();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('AI preview copied');
+  } catch {
+    toast('Copy blocked by browser');
+  }
+}
 
 /* ════════════════════════ BOARD SEARCH ════════════════════════ */
 let searchMatches = [], searchIdx = 0;
