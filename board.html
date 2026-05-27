@@ -7163,6 +7163,15 @@ function inspectBoardClipboardCatcherForImage() {
   return false;
 }
 
+function selectOnlyPastedCards(ids) {
+  const validIds = (ids || []).filter(Boolean);
+  if (!validIds.length) return;
+  if (typeof cancelBoxSelection === 'function') cancelBoxSelection();
+  clearSelection();
+  validIds.forEach(id => selectCard(id));
+  if (typeof updateMultiSelBox === 'function') updateMultiSelBox();
+}
+
 document.addEventListener('pointerdown', e => {
   if (!boardWrap?.contains(e.target)) return;
   if (isBoardTypingTarget(e.target)) return;
@@ -11644,7 +11653,8 @@ async function loadImageFile(file) {
 function addImageCardFromSource(src, title='Image', pos=null) {
   if (!src) return false;
   const target = resolveBoardPlacement(pos || pendingImagePos);
-  addCard('image', target.x, target.y, { title, src }, 320, 240);
+  const card = addCard('image', target.x, target.y, { title, src }, 320, 240);
+  selectOnlyPastedCards([card.id]);
   pendingImagePos = null;
   scheduleSave && scheduleSave();
   saveLocal && saveLocal();
@@ -11652,21 +11662,22 @@ function addImageCardFromSource(src, title='Image', pos=null) {
   return true;
 }
 
-async function addImageCardFromFile(file, title='Pasted image', pos=null) {
+async function addImageCardFromFile(file, title='Pasted image', pos=null, selectAfter=true) {
   const imageFile = await normalizeClipboardImageFile(file);
   const prepared = await prepareBoardImageFile(imageFile);
   const target = resolveBoardPlacement(pos || pendingImagePos);
-  addCard('image', target.x, target.y, {
+  const card = addCard('image', target.x, target.y, {
     title,
     src: prepared.dataUrl,
     imageSize: prepared.bytes,
     imageOptimized: prepared.optimized,
   }, 320, 240);
+  if (selectAfter) selectOnlyPastedCards([card.id]);
   pendingImagePos = null;
   scheduleSave && scheduleSave();
   saveLocal && saveLocal();
   toast && toast('🖼 Image pasted');
-  return true;
+  return card;
 }
 
 async function addImageCardsFromFiles(files, pos=null) {
@@ -11674,11 +11685,14 @@ async function addImageCardsFromFiles(files, pos=null) {
   if (!imageFiles.length) return false;
   _lastPasteHandledAt = performance.now();
   let offset = 0;
+  const pastedIds = [];
   for (const file of imageFiles) {
     const target = resolveBoardPlacement(pos || pendingImagePos);
-    await addImageCardFromFile(file, file.name || 'Pasted image', { x: target.x + offset, y: target.y + offset });
+    const card = await addImageCardFromFile(file, file.name || 'Pasted image', { x: target.x + offset, y: target.y + offset }, false);
+    if (card?.id) pastedIds.push(card.id);
     offset += 28;
   }
+  selectOnlyPastedCards(pastedIds);
   return true;
 }
 
