@@ -1194,7 +1194,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 }
 .card-sticky .card-header{display:none!important;}
 .card-sticky .sticky-body{
-  width:100%;height:100%;padding:0!important;background:transparent!important;
+  width:100%;height:100%;padding:0!important;background:var(--sticky-color,#FFE566)!important;
   display:flex!important;align-items:stretch!important;justify-content:stretch!important;
 }
 .card-sticky .sticky-textarea{
@@ -4107,12 +4107,48 @@ function _cardVisible(card) {
   return card.data.private === _currentUserId();
 }
 
+function normalizeStickyColor(card) {
+  const color = card?.color || card?.data?.color || STICKY_COLORS[0];
+  if (card) {
+    card.color = color;
+    card.data = card.data || {};
+    card.data.color = color;
+  }
+  return color;
+}
+
+function stickyInkForColor(color) {
+  const hex = String(color || '').replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return '#172033';
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq < 145 ? '#FFFFFF' : '#172033';
+}
+
+function applyStickyColor(card, el, color) {
+  if (!card || !el) return;
+  card.color = color;
+  card.data = card.data || {};
+  card.data.color = color;
+  const ink = stickyInkForColor(color);
+  el.style.setProperty('--sticky-color', color);
+  el.style.setProperty('--sticky-ink', ink);
+  el.style.background = color;
+  el.style.backgroundColor = color;
+  const body = el.querySelector('.sticky-body');
+  if (body) body.style.background = color;
+  const textarea = el.querySelector('.sticky-textarea');
+  if (textarea) textarea.style.color = ink;
+}
+
 function renderSticky(el, card) {
-  const stickyColor = card.color || STICKY_COLORS[0];
-  el.style.setProperty('--sticky-color', stickyColor);
-  el.style.backgroundColor = stickyColor;
+  const stickyColor = normalizeStickyColor(card);
+  applyStickyColor(card, el, stickyColor);
   const body = document.createElement('div');
   body.className = 'card-body sticky-body';
+  body.style.background = stickyColor;
 
   const tb = document.createElement('div');
   tb.className = 'sticky-toolbar';
@@ -4125,9 +4161,7 @@ function renderSticky(el, card) {
     dot.addEventListener('click', e => {
       e.stopPropagation();
       snapshot();
-      card.color = c;
-      el.style.setProperty('--sticky-color', c);
-      el.style.backgroundColor = c;
+      applyStickyColor(card, el, c);
       el.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
       dot.classList.add('active');
       scheduleSave();
@@ -4142,6 +4176,7 @@ function renderSticky(el, card) {
 
   const ta = document.createElement('textarea');
   ta.className = 'sticky-textarea';
+  ta.style.color = stickyInkForColor(stickyColor);
   ta.value = card.data.text || '';
   ta.placeholder = 'Type';
   ta.setAttribute('aria-label', 'Sticky note text');
@@ -6252,20 +6287,19 @@ function showLayerPopover(cardId) {
       pop.appendChild(stickyRow);
     }
     stickyRow.innerHTML = '';
+    const activeStickyColor = normalizeStickyColor(card);
     STICKY_COLORS.forEach(c => {
       const sw = document.createElement('button');
       sw.type = 'button';
-      sw.className = 'sticky-layer-swatch' + (c === (card.color || STICKY_COLORS[0]) ? ' active' : '');
+      sw.className = 'sticky-layer-swatch' + (c === activeStickyColor ? ' active' : '');
       sw.title = 'Sticky color';
       sw.style.background = c;
       sw.addEventListener('click', e => {
         e.stopPropagation();
         snapshot();
-        card.color = c;
         const el = getCardEl(cardId);
         if (el) {
-          el.style.setProperty('--sticky-color', c);
-          el.style.backgroundColor = c;
+          applyStickyColor(card, el, c);
           el.querySelectorAll('.color-dot').forEach(d => d.classList.toggle('active', d.dataset.color === c));
         }
         stickyRow.querySelectorAll('.sticky-layer-swatch').forEach(s => s.classList.remove('active'));
