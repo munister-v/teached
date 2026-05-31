@@ -843,14 +843,7 @@ body.alt-duplicating *{cursor:copy!important;}
 /* Hide handles when card is locked */
 .board-card.card-locked .resize-handle{display:none!important;}
 .board-card.card-locked{cursor:default;}
-.board-card.card-locked::after{
-  content:"🔒";
-  position:absolute;right:6px;bottom:6px;z-index:32;
-  width:20px;height:20px;border-radius:999px;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(5,0,56,.72);color:#fff;font-size:10px;
-  pointer-events:none;
-}
+/* Lock indicator removed from card — visible via layer popover toolbar button */
 
 /* Anchor dots (Miro-style — small blue squares with cross arrows on hover) */
 .anchor-dot{
@@ -1388,6 +1381,9 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 }
 
 /* ── IMAGE ── */
+.card-image{background:transparent!important;box-shadow:none!important;border-color:transparent!important;}
+.card-image.selected{border-color:#4262FF!important;box-shadow:0 0 0 1px rgba(66,98,255,.20),0 4px 16px rgba(0,0,0,.12)!important;}
+.card-image .card-header{display:none!important;}
 .card-image .card-body{padding:0;display:flex;flex-direction:column;overflow:hidden;}
 .img-ph{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:6px;color:var(--text-3);font-size:12px;cursor:pointer;padding:20px;}
@@ -4402,6 +4398,10 @@ function renderSticky(el, card) {
   body.appendChild(ta);
   el.appendChild(body);
   requestAnimationFrame(fit);
+  el.addEventListener('click', e => {
+    if (e.target.closest('.sticky-toolbar,.sticky-close,.color-dot')) return;
+    if (el.classList.contains('selected') || el.classList.contains('sticky-editing')) editStickyText(el, ta);
+  });
   el.addEventListener('dblclick', e => {
     if (e.target.closest('.sticky-toolbar,.sticky-close,.color-dot')) return;
     editStickyText(el, ta);
@@ -4563,6 +4563,11 @@ function renderText(el, card) {
   body.appendChild(editor);
   el.appendChild(tc);
   el.appendChild(body);
+  // Clicking anywhere on the card (not close/toolbar) focuses the editor
+  el.addEventListener('click', e => {
+    if (e.target.closest('.card-close,.text-format-toolbar')) return;
+    if (!e.defaultPrevented) editor.focus();
+  });
 }
 
 function renderPlan(el, card) {
@@ -4695,14 +4700,13 @@ function renderVideo(el, card) {
 
 /* ══════════════════════ IMAGE RENDERER ══════════════════════ */
 function renderImage(el, card) {
-  const hdr = makeHeader('🖼', card.data.title || 'Image', card.id);
-  el.appendChild(hdr);
   const body = document.createElement('div');
   body.className = 'card-body image-body';
   if (card.data.src) {
     const img = document.createElement('img');
     img.src = card.data.src;
     img.alt = card.data.title || 'Image';
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;border-radius:var(--card-radius,6px);';
     img.onerror = () => { img.src = ''; body.innerHTML = `<div style="padding:12px;font-size:11px;color:var(--text-3);text-align:center;">Could not load image</div>`; };
     body.appendChild(img);
   } else {
@@ -6431,9 +6435,11 @@ const FRAME_COLORS = [
 
 function showLayerPopover(cardId) {
   if (state.selected.size !== 1) { hideLayerPopover(); return; }
+  const card = state.cards.find(c => c.id === cardId);
+  // Text cards have their own built-in formatting toolbar — no need for duplicate popover
+  if (card?.type === 'text') { hideLayerPopover(); return; }
   const pop = ensureLayerPopover();
   pop.dataset.cardId = cardId;
-  const card = state.cards.find(c => c.id === cardId);
   pop.querySelector('[data-layer="lock"]').classList.toggle('active', !!card?.data?.locked);
   pop.querySelector('[data-layer="lock"]').title = card?.data?.locked ? 'Unlock' : 'Lock movement';
 
@@ -7201,10 +7207,10 @@ function handleBoardPasteShortcut(e) {
   if (!(e.ctrlKey || e.metaKey) || e.shiftKey || !boardShortcut(e, 'v')) return false;
   if (isBoardTypingTarget(e.target)) return false;
   e.__teachedPasteShortcutSeen = true;
-  e.preventDefault();
-  pasteFromClipboardShortcut();
+  // Ensure catcher has focus so the native paste event fires into it.
+  // Do NOT preventDefault — let the browser fire the paste event naturally.
+  // handleBoardPaste (capture-phase paste listener) will process it.
   focusBoardClipboardCatcher();
-  scheduleAsyncClipboardPasteFallback();
   return true;
 }
 
