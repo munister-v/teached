@@ -10,9 +10,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <title>TeachEd · Board</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -9106,7 +9103,11 @@ function loadBoard() {
     state.pan    = data.pan    || { x:100, y:60 };
     state.scale  = data.scale  || 1;
     state.nextId = data.nextId || 1;
-    (data.cards  || []).forEach((c, i) => { normalizeCardLayer(c, i + 1); state.cards.push(c); board.appendChild(renderCard(c)); });
+    // Build one fragment instead of inserting every card separately. This
+    // avoids repeated style/layout work on large boards during first paint.
+    const fragment = document.createDocumentFragment();
+    (data.cards  || []).forEach((c, i) => { normalizeCardLayer(c, i + 1); state.cards.push(c); fragment.appendChild(renderCard(c)); });
+    board.appendChild(fragment);
     state.arrows = data.arrows || [];
     state.strokes = Array.isArray(data.strokes) ? data.strokes : [];
     state.groups = (data.groups || []).map(g => ({ ...g, cardIds: new Set(g.cardIds) }));
@@ -9359,7 +9360,9 @@ if (!loaded) {
 }
 
 updateEmpty();
-renderMinimap();
+// Defer the first minimap paint until after the board has become interactive.
+if (window.requestIdleCallback) requestIdleCallback(() => renderMinimap(), { timeout: 180 });
+else setTimeout(() => renderMinimap(), 80);
 
 /* ════════ COMMUNITY IMPORT — ?communityImport=<base64> ════════ */
 (function checkCommunityImport() {
@@ -10073,7 +10076,9 @@ function loadBoardData(data) {
   state.pan    = data.pan    || { x:100, y:60 };
   state.scale  = data.scale  || 1;
   state.nextId = data.nextId || 1;
-  (data.cards  || []).forEach((c, i) => { normalizeCardLayer(c, i + 1); state.cards.push(c); board.appendChild(renderCard(c)); });
+  const fragment = document.createDocumentFragment();
+  (data.cards  || []).forEach((c, i) => { normalizeCardLayer(c, i + 1); state.cards.push(c); fragment.appendChild(renderCard(c)); });
+  board.appendChild(fragment);
   state.arrows = data.arrows || [];
   state.strokes = Array.isArray(data.strokes) ? data.strokes : [];
   state.groups = (data.groups || []).map(g => ({ ...g, cardIds: new Set(g.cardIds) }));
@@ -10106,7 +10111,10 @@ function loadBoardData(data) {
   applyTransform();
   renderAllArrows();
   if (typeof renderAllStrokes === 'function') renderAllStrokes();
-  renderMinimap();
+  // The minimap is secondary UI; let the board paint first and draw it on the
+  // next idle frame so opening a dense board stays responsive.
+  if (window.requestIdleCallback) requestIdleCallback(() => renderMinimap(), { timeout: 180 });
+  else setTimeout(() => renderMinimap(), 80);
   updateEmpty();
   updateSessionChip();
   updateGroupOutlines();
