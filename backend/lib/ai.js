@@ -261,6 +261,16 @@ async function generateLesson(raw, userId = 'anonymous') {
   try { return await task; } finally { pending.delete(key); }
 }
 
-function status() { return { configured: Boolean(process.env.OPENROUTER_API_KEY), model: process.env.OPENROUTER_MODEL || 'auto', localFallback: true, cache: cache.size, catalogFresh: modelCatalog.expires > Date.now(), catalogSize: modelCatalog.models.length }; }
+function status() {
+  return {
+    configured: Boolean(process.env.OPENROUTER_API_KEY),
+    model: process.env.OPENROUTER_MODEL || 'auto',
+    localFallback: true,
+    cache: cache.size,
+    catalogFresh: modelCatalog.expires > Date.now(),
+    catalogSize: modelCatalog.models.length,
+    cooledModels: [...modelHealth.entries()].filter(([, value]) => value.cooldownUntil > Date.now()).length,
+  };
+}
 
 module.exports = { generateLesson, status, normalizeInput, localLesson };
