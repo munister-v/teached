@@ -11550,6 +11550,14 @@ const AI_INTERNAL_DICTIONARY = {
   Reading: ['predict','gist','detail','inference','scan','evidence','context','summarise'],
   Listening: ['predict','gist','detail','signpost','intonation','note-taking','confirm','transfer'],
 };
+const AI_INTERNAL_PATTERNS = {
+  Writing: { frames:['Claim → reason → evidence → link','Although X, Y because Z','This suggests that…','A stronger example would…'], tasks:['model-text noticing','sentence-combining','paragraph architecture','peer-review ladder','timed response'] },
+  Speaking: { frames:['I see your point, but…','What makes you say that?','Could you give an example?','If I understand you correctly…'], tasks:['opinion line','information gap','role-play ladder','speed-dating prompts','decision task'] },
+  Vocabulary: { frames:['It is often used with…','In this context it means…','A more formal alternative is…','I can use it when…'], tasks:['context detective','word-family grid','retrieval race','collocation dominoes','sorting challenge'] },
+  Grammar: { frames:['Notice what changes when…','The speaker chooses this form to…','If…, then…','It would be more natural to say…'], tasks:['guided discovery','concept-check questions','micro-drills','error auction','reformulation relay'] },
+  Reading: { frames:['The headline suggests…','The evidence for this is…','The writer implies rather than states…','This paragraph functions to…'], tasks:['prediction grid','gist race','evidence hunt','paragraph jigsaw','writer-intent debate'] },
+  Listening: { frames:['I heard the speaker emphasise…','The signpost tells us that…','The attitude sounds… because…','I missed the detail, but…'], tasks:['prediction pause','first-listen gist','second-listen detail','dictogloss','note reconstruction'] },
+};
 
 function generateLocalAiLesson(input) {
   const minutes = parseInt(input.duration, 10) || 45;
@@ -11567,6 +11575,7 @@ function generateLocalAiLesson(input) {
     Listening: ['prediction', 'first listen gist', 'second listen details', 'speaking transfer'],
   };
   const recipe = skillRecipes[input.skill] || skillRecipes.Writing;
+  const patternPack = AI_INTERNAL_PATTERNS[input.skill] || AI_INTERNAL_PATTERNS.Writing;
   const cleanTopic = input.topic.replace(/\s+/g, ' ').trim();
   const words = cleanTopic
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
@@ -11584,7 +11593,7 @@ function generateLocalAiLesson(input) {
     .filter(Boolean)
     .slice(0, 6);
   const skillWords = AI_INTERNAL_DICTIONARY[input.skill] || AI_INTERNAL_DICTIONARY.Writing;
-  const vocabulary = [...new Set([...skillWords, ...(words.length ? words : ['claim','reason','example','contrast','conclusion']), ...memoryWords])].slice(0, 12);
+  const vocabulary = [...new Set([...skillWords, ...patternPack.frames, ...(words.length ? words : ['claim','reason','example','contrast','conclusion']), ...memoryWords])].slice(0, 14);
   const memoryHints = [
     input.teacherMemory ? `Teacher style: ${input.teacherMemory}` : '',
     input.studentMemory ? `Class profile: ${input.studentMemory}` : '',
@@ -11627,9 +11636,9 @@ function generateLocalAiLesson(input) {
     summary: `${input.duration} ${input.mode.replace('-', ' ')} for ${input.audience.toLowerCase()} with reusable cards, homework and teacher control.${adaptedNote}`,
     stages: [
       { time: `${warm} min`, title: 'Hook + goal', goal: 'Activate context and make the lesson outcome visible.', activity: `Quick board prompt: what makes "${cleanTopic}" useful or difficult? Students add 2 sticky notes.` },
-      { time: `${lead} min`, title: 'Input + noticing', goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Teacher presents a model and students identify ${recipe[0]} patterns with color coding.${mistakeItems[0] ? ' Watch for: ' + mistakeItems[0] + '.' : ''}` },
-      { time: `${practice} min`, title: 'Controlled practice', goal: 'Move from recognition to accurate production.', activity: `Students complete a ${recipe[1]} task, then compare answers and correct one common mistake.${mistakeItems[1] ? ' Include contrast with: ' + mistakeItems[1] + '.' : ''}` },
-      { time: `${output} min`, title: input.mode === 'game-pack' ? 'Game challenge' : 'Freer task', goal: 'Use the target language in a realistic classroom product.', activity: `Pairs complete a ${recipe[2]} task and upgrade it using a mini-checklist.${input.studentMemory ? ' Personalise examples from class memory.' : ''}` },
+      { time: `${lead} min`, title: 'Input + noticing', goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Teacher presents a model and students identify ${recipe[0]} patterns with color coding. Try the frame “${patternPack.frames[0]}”.${mistakeItems[0] ? ' Watch for: ' + mistakeItems[0] + '.' : ''}` },
+      { time: `${practice} min`, title: 'Controlled practice', goal: 'Move from recognition to accurate production.', activity: `Students complete a ${patternPack.tasks[1] || recipe[1]} task, then compare answers and correct one common mistake.${mistakeItems[1] ? ' Include contrast with: ' + mistakeItems[1] + '.' : ''}` },
+      { time: `${output} min`, title: input.mode === 'game-pack' ? 'Game challenge' : 'Freer task', goal: 'Use the target language in a realistic classroom product.', activity: `Pairs complete a ${patternPack.tasks[3] || recipe[2]} task and upgrade it using “${patternPack.frames[1]}”.${input.studentMemory ? ' Personalise examples from class memory.' : ''}` },
       { time: `${reflect} min`, title: 'Reflection + homework', goal: 'Lock in progress and set the next step.', activity: `Students choose one phrase to reuse and receive homework: ${recipe[3]} based on today's board.` },
     ],
     vocabulary,

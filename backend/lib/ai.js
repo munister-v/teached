@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { CEFR, SKILLS, MODES, TEACHER_MOVES } = require('./curriculum');
 
 const BASE_URL = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
 const MODEL_TTL = Math.max(15 * 60_000, Number(process.env.OPENROUTER_MODEL_TTL_MS || 21_600_000));
@@ -14,14 +15,7 @@ let modelCatalog = { expires: 0, models: [] };
 let modelCatalogPromise = null;
 const modelHealth = new Map();
 
-const DICTIONARY = {
-  Writing: ['thesis', 'evidence', 'counterargument', 'cohesion', 'paragraph', 'example', 'revise', 'clarity'],
-  Speaking: ['opinion', 'follow-up', 'fluency', 'intonation', 'agree', 'clarify', 'negotiate', 'reaction'],
-  Vocabulary: ['collocation', 'word family', 'context', 'meaning', 'retrieve', 'sort', 'synonym', 'use'],
-  Grammar: ['pattern', 'form', 'meaning', 'auxiliary', 'word order', 'contrast', 'self-correct', 'accuracy'],
-  Reading: ['predict', 'gist', 'detail', 'inference', 'scan', 'evidence', 'context', 'summarise'],
-  Listening: ['predict', 'gist', 'detail', 'signpost', 'intonation', 'note-taking', 'confirm', 'transfer'],
-};
+const DICTIONARY = Object.fromEntries(Object.entries(SKILLS).map(([skill, data]) => [skill, data.targets]));
 
 function clean(value, max) {
   return String(value == null ? '' : value).replace(/\s+/g, ' ').trim().slice(0, max);
@@ -68,6 +62,9 @@ function localLesson(raw) {
     Listening: ['prediction', 'first-listen gist', 'second-listen details', 'speaking transfer'],
   };
   const recipe = recipes[input.skill];
+  const skillPack = SKILLS[input.skill];
+  const cefr = CEFR[input.level] || CEFR.B1;
+  const modeSteps = MODES[input.mode] || MODES['lesson-board'];
   const topicWords = wordsFrom(input.topic, 4, 8);
   const contextWords = wordsFrom(`${input.source} ${input.mistakes}`, 5, 8);
   const vocabulary = [...new Set([...DICTIONARY[input.skill], ...topicWords, ...contextWords])].slice(0, 12);
@@ -78,11 +75,11 @@ function localLesson(raw) {
     provider: 'local', mode: input.mode, title,
     summary: `${input.duration} ${input.mode.replace('-', ' ')} for ${input.audience}. The flow moves from noticing to controlled practice, then a realistic output task.${context}`,
     stages: [
-      { time: `${warm} min`, title: 'Hook + goal', goal: 'Activate context and make the outcome visible.', activity: `Students respond to a quick prompt about “${input.topic}” and set one personal target.` },
-      { time: `${lead} min`, title: 'Input + noticing', goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Use a short model and highlight ${recipe[0]} patterns. Check meaning, form and one likely error.` },
-      { time: `${practice} min`, title: 'Controlled practice', goal: 'Move from recognition to accurate production.', activity: `Complete an ${recipe[1]} task, compare in pairs and repair one answer. ${mistakes[0] ? `Target: ${mistakes[0]}.` : ''}` },
-      { time: `${output} min`, title: input.mode === 'game-pack' ? 'Game challenge' : 'Freer task', goal: 'Use the target language in a realistic classroom product.', activity: `Pairs complete a ${recipe[2]} task and upgrade it with a mini-checklist.${context}` },
-      { time: `${reflect} min`, title: 'Reflection + homework', goal: 'Lock in progress and set the next step.', activity: `Students choose one item to reuse and complete ${recipe[3]}. Homework: a short response using five target items.` },
+      { time: `${warm} min`, title: `${modeSteps[0]} + goal`, goal: cefr.outcomes[0], activity: `Students respond to a quick prompt about “${input.topic}” and set one personal target. Teacher move: ${TEACHER_MOVES[0]}.` },
+      { time: `${lead} min`, title: `${modeSteps[1]} + noticing`, goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Use a short model and highlight ${recipe[0]} patterns. Practise the frame “${skillPack.frames[0]}” and check one likely error.` },
+      { time: `${practice} min`, title: `${modeSteps[2]}`, goal: cefr.outcomes[1], activity: `Complete an ${recipe[1]} task using ${skillPack.targets.slice(0, 3).join(', ')}, compare in pairs and repair one answer. ${mistakes[0] ? `Target: ${mistakes[0]}.` : ''}` },
+      { time: `${output} min`, title: `${modeSteps[3]}`, goal: cefr.outcomes[2], activity: `Pairs complete a ${recipe[2]} task and upgrade it with the frame “${skillPack.frames[1]}”.${context}` },
+      { time: `${reflect} min`, title: `${modeSteps[4]} + homework`, goal: 'Make progress visible and set the next step.', activity: `Students choose one item to reuse, complete ${recipe[3]}, then use an exit ticket. Teacher move: ${TEACHER_MOVES[TEACHER_MOVES.length - 1]}.` },
     ],
     vocabulary,
     memoryHints: [input.teacherMemory && `Teacher style: ${input.teacherMemory}`, input.studentMemory && `Class profile: ${input.studentMemory}`, mistakes.length && `Target mistakes: ${mistakes.join(', ')}`].filter(Boolean),
@@ -90,7 +87,7 @@ function localLesson(raw) {
     modeAddons: input.mode === 'game-pack' ? ['Matching round', 'Sorting round', 'Challenge round', 'Student-created round'] : ['Warm-up', 'Input', 'Practice', 'Production', 'Reflection', 'Homework'],
     warmupPrompts: [`What do you already know about ${input.topic}?`, 'What is one mistake people make with this topic?', 'Write one useful question for a partner.'],
     assessmentCriteria: [input.skill === 'Writing' ? 'Clear position and logical paragraphing' : 'Clear message and active participation', `Accurate use of ${vocabulary.slice(0, 3).join(', ')}`, mistakes[0] ? `Avoid: ${mistakes[0]}` : 'Self-correct at least one sentence'],
-    teacherScript: [`Today we are training ${input.skill.toLowerCase()} through ${input.topic}.`, 'First notice, then practise safely, then use it in a real task.'],
+    teacherScript: [`Today we are training ${input.skill.toLowerCase()} through ${input.topic}.`, 'First notice, then practise safely, then use it in a real task.', ...TEACHER_MOVES.slice(1, 4)],
     challenge: 'Fast finishers add one advanced phrase and one follow-up question.',
     teacherTip: input.teacherMemory ? 'Keep the saved teacher style visible while correcting.' : 'Save teacher memory to make the next board more personal.',
     homework: `Write or record a short response using at least 5 target items from “${input.topic}”.`,
@@ -123,7 +120,9 @@ function allow(userId) {
 }
 
 function promptFor(input) {
-  return `Create a practical ${input.duration} ${input.level} English ${input.skill} lesson for ${input.audience}. Topic: ${input.topic}. Mode: ${input.mode}. Teacher memory: ${input.teacherMemory || 'none'}. Student memory: ${input.studentMemory || 'none'}. Mistakes: ${input.mistakes || 'none'}. Source: ${input.source || 'none'}. Return ONLY valid JSON with keys title, summary, stages (array of 5 objects with time,title,goal,activity), vocabulary (array), warmupPrompts (array), assessmentCriteria (array), homework, teacherTip, mistakeItems (array), memoryHints (array). Keep activities concrete, age-appropriate and non-repetitive.`;
+  const pack = SKILLS[input.skill] || SKILLS.Writing;
+  const level = CEFR[input.level] || CEFR.B1;
+  return `Create a practical ${input.duration} ${input.level} English ${input.skill} lesson for ${input.audience}. Topic: ${input.topic}. Mode: ${input.mode}. Teacher memory: ${input.teacherMemory || 'none'}. Student memory: ${input.studentMemory || 'none'}. Mistakes: ${input.mistakes || 'none'}. Source: ${input.source || 'none'}. Internal target vocabulary: ${pack.targets.join(', ')}. Useful frames: ${pack.frames.join(' | ')}. Suggested task patterns: ${pack.tasks.join(', ')}. Level outcomes: ${level.outcomes.join('; ')}. Return ONLY valid JSON with keys title, summary, stages (array of 5 objects with time,title,goal,activity), vocabulary (array), warmupPrompts (array), assessmentCriteria (array), homework, teacherTip, mistakeItems (array), memoryHints (array). Keep activities concrete, age-appropriate and non-repetitive; use at least two internal frames and one task pattern.`;
 }
 
 function numericCost(value) {
