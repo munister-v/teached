@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { CEFR, SKILLS, MODES, TEACHER_MOVES } = require('./curriculum');
+const { CEFR, SKILLS, MODES, TEACHER_MOVES, BLUEPRINTS, DIFFERENTIATION, CHECKS, REFLECTIONS } = require('./curriculum');
 
 const BASE_URL = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
 const MODEL_TTL = Math.max(15 * 60_000, Number(process.env.OPENROUTER_MODEL_TTL_MS || 21_600_000));
@@ -65,6 +65,8 @@ function localLesson(raw) {
   const skillPack = SKILLS[input.skill];
   const cefr = CEFR[input.level] || CEFR.B1;
   const modeSteps = MODES[input.mode] || MODES['lesson-board'];
+  const blueprint = BLUEPRINTS[input.skill] || BLUEPRINTS.Writing;
+  const pick = (items, index) => items[index % items.length];
   const topicWords = wordsFrom(input.topic, 4, 8);
   const contextWords = wordsFrom(`${input.source} ${input.mistakes}`, 5, 8);
   const vocabulary = [...new Set([...DICTIONARY[input.skill], ...topicWords, ...contextWords])].slice(0, 12);
@@ -75,18 +77,18 @@ function localLesson(raw) {
     provider: 'local', mode: input.mode, title,
     summary: `${input.duration} ${input.mode.replace('-', ' ')} for ${input.audience}. The flow moves from noticing to controlled practice, then a realistic output task.${context}`,
     stages: [
-      { time: `${warm} min`, title: `${modeSteps[0]} + goal`, goal: cefr.outcomes[0], activity: `Students respond to a quick prompt about “${input.topic}” and set one personal target. Teacher move: ${TEACHER_MOVES[0]}.` },
-      { time: `${lead} min`, title: `${modeSteps[1]} + noticing`, goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Use a short model and highlight ${recipe[0]} patterns. Practise the frame “${skillPack.frames[0]}” and check one likely error.` },
-      { time: `${practice} min`, title: `${modeSteps[2]}`, goal: cefr.outcomes[1], activity: `Complete an ${recipe[1]} task using ${skillPack.targets.slice(0, 3).join(', ')}, compare in pairs and repair one answer. ${mistakes[0] ? `Target: ${mistakes[0]}.` : ''}` },
-      { time: `${output} min`, title: `${modeSteps[3]}`, goal: cefr.outcomes[2], activity: `Pairs complete a ${recipe[2]} task and upgrade it with the frame “${skillPack.frames[1]}”.${context}` },
-      { time: `${reflect} min`, title: `${modeSteps[4]} + homework`, goal: 'Make progress visible and set the next step.', activity: `Students choose one item to reuse, complete ${recipe[3]}, then use an exit ticket. Teacher move: ${TEACHER_MOVES[TEACHER_MOVES.length - 1]}.` },
+      { time: `${warm} min`, title: `${modeSteps[0]} + goal`, goal: cefr.outcomes[0], activity: `Use ${pick(blueprint.hook, 0)} around “${input.topic}”. Students set one personal target. Teacher move: ${TEACHER_MOVES[0]}. Check: ${CHECKS[0]}` },
+      { time: `${lead} min`, title: `${modeSteps[1]} + noticing`, goal: `Build core ${input.skill.toLowerCase()} language.`, activity: `Use ${pick(blueprint.input, 1)} and practise the frame “${skillPack.frames[0]}”. Check meaning, form and one likely error: ${mistakes[0] || skillPack.errors[0]}.` },
+      { time: `${practice} min`, title: `${modeSteps[2]}`, goal: cefr.outcomes[1], activity: `Run ${pick(blueprint.practice, 2)} using ${skillPack.targets.slice(0, 3).join(', ')}. Support: ${DIFFERENTIATION.support[0]}. Stretch: ${DIFFERENTIATION.stretch[0]}. Require one repair and ask: ${CHECKS[2]}` },
+      { time: `${output} min`, title: `${modeSteps[3]}`, goal: cefr.outcomes[2], activity: `Pairs complete ${pick(blueprint.output, 1)} and upgrade it with “${skillPack.frames[1]}”. Core success check: ${blueprint.assess[1]}; stretch: ${DIFFERENTIATION.stretch[1]}.${context}` },
+      { time: `${reflect} min`, title: `${modeSteps[4]} + homework`, goal: 'Make progress visible and set the next step.', activity: `Use ${pick(REFLECTIONS, 0)} then complete ${recipe[3]}. Exit ticket: ${pick(REFLECTIONS, 3)} Teacher move: ${TEACHER_MOVES[TEACHER_MOVES.length - 1]}.` },
     ],
     vocabulary,
     memoryHints: [input.teacherMemory && `Teacher style: ${input.teacherMemory}`, input.studentMemory && `Class profile: ${input.studentMemory}`, mistakes.length && `Target mistakes: ${mistakes.join(', ')}`].filter(Boolean),
     mistakeItems: mistakes,
     modeAddons: input.mode === 'game-pack' ? ['Matching round', 'Sorting round', 'Challenge round', 'Student-created round'] : ['Warm-up', 'Input', 'Practice', 'Production', 'Reflection', 'Homework'],
     warmupPrompts: [`What do you already know about ${input.topic}?`, 'What is one mistake people make with this topic?', 'Write one useful question for a partner.'],
-    assessmentCriteria: [input.skill === 'Writing' ? 'Clear position and logical paragraphing' : 'Clear message and active participation', `Accurate use of ${vocabulary.slice(0, 3).join(', ')}`, mistakes[0] ? `Avoid: ${mistakes[0]}` : 'Self-correct at least one sentence'],
+    assessmentCriteria: [input.skill === 'Writing' ? 'Clear position and logical paragraphing' : 'Clear message and active participation', `Accurate use of ${vocabulary.slice(0, 3).join(', ')}`, ...blueprint.assess.slice(0, 2), mistakes[0] ? `Avoid: ${mistakes[0]}` : 'Self-correct at least one sentence'],
     teacherScript: [`Today we are training ${input.skill.toLowerCase()} through ${input.topic}.`, 'First notice, then practise safely, then use it in a real task.', ...TEACHER_MOVES.slice(1, 4)],
     challenge: 'Fast finishers add one advanced phrase and one follow-up question.',
     teacherTip: input.teacherMemory ? 'Keep the saved teacher style visible while correcting.' : 'Save teacher memory to make the next board more personal.',
@@ -122,7 +124,8 @@ function allow(userId) {
 function promptFor(input) {
   const pack = SKILLS[input.skill] || SKILLS.Writing;
   const level = CEFR[input.level] || CEFR.B1;
-  return `Create a practical ${input.duration} ${input.level} English ${input.skill} lesson for ${input.audience}. Topic: ${input.topic}. Mode: ${input.mode}. Teacher memory: ${input.teacherMemory || 'none'}. Student memory: ${input.studentMemory || 'none'}. Mistakes: ${input.mistakes || 'none'}. Source: ${input.source || 'none'}. Internal target vocabulary: ${pack.targets.join(', ')}. Useful frames: ${pack.frames.join(' | ')}. Suggested task patterns: ${pack.tasks.join(', ')}. Level outcomes: ${level.outcomes.join('; ')}. Return ONLY valid JSON with keys title, summary, stages (array of 5 objects with time,title,goal,activity), vocabulary (array), warmupPrompts (array), assessmentCriteria (array), homework, teacherTip, mistakeItems (array), memoryHints (array). Keep activities concrete, age-appropriate and non-repetitive; use at least two internal frames and one task pattern.`;
+  const blueprint = BLUEPRINTS[input.skill] || BLUEPRINTS.Writing;
+  return `Create a practical ${input.duration} ${input.level} English ${input.skill} lesson for ${input.audience}. Topic: ${input.topic}. Mode: ${input.mode}. Teacher memory: ${input.teacherMemory || 'none'}. Student memory: ${input.studentMemory || 'none'}. Mistakes: ${input.mistakes || 'none'}. Source: ${input.source || 'none'}. Internal target vocabulary: ${pack.targets.join(', ')}. Useful frames: ${pack.frames.join(' | ')}. Suggested task patterns: ${pack.tasks.join(', ')}. Blueprint options: hook=${blueprint.hook.join(', ')}; input=${blueprint.input.join(', ')}; practice=${blueprint.practice.join(', ')}; output=${blueprint.output.join(', ')}. Assessment dimensions: ${blueprint.assess.join(', ')}. Differentiation must include support, core and stretch. Level outcomes: ${level.outcomes.join('; ')}. Return ONLY valid JSON with keys title, summary, stages (array of 5 objects with time,title,goal,activity), vocabulary (array), warmupPrompts (array), assessmentCriteria (array), homework, teacherTip, mistakeItems (array), memoryHints (array). Keep activities concrete, age-appropriate and non-repetitive; use at least two internal frames, one task pattern, one check-for-understanding and explicit support/stretch.`;
 }
 
 function numericCost(value) {

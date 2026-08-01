@@ -56,4 +56,59 @@ const MODES = {
 
 const TEACHER_MOVES = ['model one example', 'ask a concept-check question', 'give wait time', 'recast before explaining', 'pair students before whole-class feedback', 'collect one strong example and one repair', 'end with a visible exit ticket'];
 
-module.exports = { CEFR, SKILLS, MODES, TEACHER_MOVES };
+const BLUEPRINTS = {
+  Writing: {
+    hook: ['silent quickwrite', 'rank three claims', 'image-to-idea prompt'],
+    input: ['annotated model', 'colour-code the structure', 'notice-and-name language'],
+    practice: ['paragraph puzzle', 'guided expansion', 'evidence sort', 'peer checklist'],
+    output: ['timed paragraph', 'two-position mini essay', 'rewrite for a new audience'],
+    assess: ['thesis clarity', 'evidence relevance', 'cohesion between ideas', 'register control'],
+  },
+  Speaking: {
+    hook: ['four-corners opinion', 'silent think-pair-share', 'question carousel'],
+    input: ['teacher model with transcript', 'intonation replay', 'useful-language sort'],
+    practice: ['information gap', 'role card ladder', 'shadow-and-swap', 'repair relay'],
+    output: ['decision meeting', 'mini-podcast', 'problem-solving panel'],
+    assess: ['turn-taking', 'follow-up quality', 'intelligibility', 'interactional repair'],
+  },
+  Vocabulary: {
+    hook: ['odd-one-out', 'prediction from six words', 'personal association map'],
+    input: ['context reveal', 'word-family investigation', 'collocation notice'],
+    practice: ['retrieval grid', 'definition auction', 'collocation dominoes', 'semantic scale'],
+    output: ['story with target chunks', 'category challenge', 'teach-back round'],
+    assess: ['meaning in context', 'word form', 'collocation accuracy', 'pronunciation'],
+  },
+  Grammar: {
+    hook: ['error detective', 'meaning contrast', 'quick diagnostic poll'],
+    input: ['guided discovery', 'timeline and form map', 'minimal-pair noticing'],
+    practice: ['controlled substitution', 'error auction', 'reformulation relay', 'choice-and-justify'],
+    output: ['scenario role-play', 'constraint story', 'personal examples exchange'],
+    assess: ['form', 'meaning', 'appropriacy', 'self-correction'],
+  },
+  Reading: {
+    hook: ['headline prediction', 'question-before-text', 'visual inference'],
+    input: ['text architecture walk', 'think-aloud inference', 'reference-word trail'],
+    practice: ['gist race', 'evidence hunt', 'paragraph jigsaw', 'quote-to-claim match'],
+    output: ['editorial response', 'summary ladder', 'writer-intent debate'],
+    assess: ['gist accuracy', 'evidence use', 'inference', 'summary concision'],
+  },
+  Listening: {
+    hook: ['sound prediction', 'speaker profile', 'keyword anticipation'],
+    input: ['first-listen gist', 'signpost map', 'intonation replay'],
+    practice: ['note reconstruction', 'dictogloss', 'detail ranking', 'listen-and-move'],
+    output: ['response recording', 'information transfer', 'attitude panel'],
+    assess: ['gist', 'detail', 'speaker attitude', 'notes-to-output transfer'],
+  },
+};
+
+const DIFFERENTIATION = {
+  support: ['provide a word bank', 'give a sentence starter', 'reduce choices to three', 'allow rehearsal before sharing', 'pair with a clear model'],
+  core: ['use the base task and checklist', 'require one repair after feedback', 'rotate partner roles', 'ask for evidence of the choice'],
+  stretch: ['add a counterexample', 'change audience or register', 'remove the model', 'require a follow-up question', 'ask for a second strategy'],
+};
+
+const CHECKS = ['What changes if we remove this word?', 'Which answer is possible but less natural?', 'How do you know?', 'Can you show the evidence?', 'What would a partner misunderstand?', 'What is your next precise improvement?'];
+
+const REFLECTIONS = ['One thing I can now do is…', 'My strongest example was… because…', 'I repaired… by…', 'Next time I will notice…', 'A useful phrase I will carry forward is…'];
+
+module.exports = { CEFR, SKILLS, MODES, TEACHER_MOVES, BLUEPRINTS, DIFFERENTIATION, CHECKS, REFLECTIONS };
