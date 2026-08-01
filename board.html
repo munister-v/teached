@@ -11648,6 +11648,14 @@ function generateLocalAiLesson(input) {
     warmupPrompts,
     assessmentCriteria,
     teacherScript,
+    lessonArc: modeAddons.slice(0, 5),
+    differentiation: {
+      support: ['Provide a word bank', 'Give a sentence starter', 'Allow rehearsal before sharing'],
+      core: ['Use the base task and checklist', 'Require one repair after feedback', 'Rotate partner roles'],
+      stretch: ['Add a counterexample', 'Change audience or register', 'Remove the model'],
+    },
+    checks: ['How do you know?', 'Can you show the evidence?', 'Which answer is less natural?', 'What is your next precise improvement?'],
+    reflections: ['One thing I can now do is…', 'I repaired… by…', 'Next time I will notice…'],
     challenge,
     teacherTip: input.teacherMemory ? 'Keep the saved teacher style visible while correcting: use it as the lesson tone guardrail.' : 'Save teacher memory to make this assistant feel more personal.',
     homework: `Write or record a short response using at least 5 target items from "${cleanTopic}".`,
@@ -11675,6 +11683,8 @@ function renderAiAssistantPreview(result) {
     ${result.warmupPrompts?.length ? `<div class="ai-stage"><div class="ai-stage-top"><span>Warm-up prompts</span><span>board-ready</span></div><ul class="ai-mini-list"><li>${result.warmupPrompts.map(esc).join('</li><li>')}</li></ul></div>` : ''}
     ${result.assessmentCriteria?.length ? `<div class="ai-stage"><div class="ai-stage-top"><span>Success criteria</span><span>rubric</span></div><ul class="ai-mini-list"><li>${result.assessmentCriteria.map(esc).join('</li><li>')}</li></ul></div>` : ''}
     ${result.modeAddons?.length ? `<div class="ai-stage"><div class="ai-stage-top"><span>Smart extras</span><span>${esc(result.mode || 'lesson')}</span></div><ul class="ai-mini-list"><li>${result.modeAddons.map(esc).join('</li><li>')}</li></ul></div>` : ''}
+    ${result.differentiation ? `<div class="ai-stage"><div class="ai-stage-top"><span>Differentiation</span><span>support · core · stretch</span></div><p><strong>Support:</strong> ${(result.differentiation.support || []).map(esc).join(' · ')}</p><p><strong>Stretch:</strong> ${(result.differentiation.stretch || []).map(esc).join(' · ')}</p></div>` : ''}
+    ${result.checks?.length ? `<div class="ai-stage"><div class="ai-stage-top"><span>Checks for understanding</span><span>formative</span></div><ul class="ai-mini-list"><li>${result.checks.map(esc).join('</li><li>')}</li></ul></div>` : ''}
     ${result.teacherTip ? `<div class="ai-stage"><div class="ai-stage-top"><span>Teacher tip</span><span>memory</span></div><p>${esc(result.teacherTip)}</p></div>` : ''}
     ${result.homework ? `<div class="ai-stage"><div class="ai-stage-top"><span>Homework</span><span>after class</span></div><p>${esc(result.homework)}</p></div>` : ''}
   `;
