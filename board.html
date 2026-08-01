@@ -3084,9 +3084,11 @@ body.board-dragging .board-card{will-change:transform,left,top;}
     <div class="ai-hero">
       <div class="ai-kicker">AI memory studio</div>
       <h2>Generate lesson boards from your <em>teaching memory.</em></h2>
-      <p>No keys, no payments, no external calls. The assistant remembers teacher style, class profile, common mistakes and preferred activities directly in this browser.</p>
+      <p>Balanced routing keeps the board useful offline: local generation is the safety net, while OpenRouter is used only when the server is configured. Every response is checked before it can touch your board.</p>
       <div class="ai-chip-row">
-        <span class="ai-chip">100% local</span>
+        <span class="ai-chip">Balanced routing</span>
+        <span class="ai-chip">Local fallback</span>
+        <span class="ai-chip">Validated JSON</span>
         <span class="ai-chip">Teacher memory</span>
         <span class="ai-chip">Student profile</span>
         <span class="ai-chip">Mistake-aware</span>
@@ -3131,6 +3133,12 @@ body.board-dragging .board-card{will-change:transform,left,top;}
           <option value="mistake-clinic">Mistake clinic</option>
           <option value="game-pack">Game pack</option>
         </select>
+        <label for="ai-provider">Generation route</label>
+        <select id="ai-provider">
+          <option value="balanced" selected>Balanced — recommended</option>
+          <option value="local">Local only — private + free</option>
+          <option value="openrouter">OpenRouter — server configured</option>
+        </select>
         <label>Quick templates</label>
         <div class="ai-template-grid">
           <button class="ai-template-btn" type="button" onclick="applyAiTemplate('ielts-writing')">IELTS writing <span>argument, examples, rubric</span></button>
@@ -3171,13 +3179,13 @@ body.board-dragging .board-card{will-change:transform,left,top;}
           <button class="ai-action ghost" onclick="copyAiAssistantPreview()">Copy</button>
         </div>
         <div class="ai-preview-body" id="ai-preview-body">
-          <div class="ai-empty">Set topic, level and skill, then generate a teacher-ready flow. Local mode already works without API.</div>
+          <div class="ai-empty">Set topic, level and skill, then generate a teacher-ready flow. Balanced mode falls back locally if the server or model is unavailable.</div>
         </div>
       </div>
     </div>
     <div class="ai-grid">
       <div class="ai-card"><h3>Memory-first approach</h3><p>The assistant becomes better when you save teacher style, class profile, target mistakes and preferred activity rhythm.</p></div>
-      <div class="ai-card"><h3>No-key principle</h3><p>Everything here runs locally. Later we can add server AI, but the product should stay useful even without paid APIs.</p></div>
+      <div class="ai-card"><h3>Spend guardrails</h3><p>OpenRouter keys stay on the server. Short prompts, strict JSON, response caching and a per-user window keep usage predictable; local mode remains the private fallback.</p></div>
     </div>
   </div>
 </div>
@@ -11377,6 +11385,7 @@ function loadAiAssistantSettings() {
     if (saved.studentMemory) document.getElementById('ai-student-memory').value = saved.studentMemory;
     if (saved.mistakes) document.getElementById('ai-mistakes').value = saved.mistakes;
     if (saved.mode) document.getElementById('ai-mode').value = saved.mode;
+    if (saved.provider) document.getElementById('ai-provider').value = saved.provider;
   } catch {}
 }
 
@@ -11386,6 +11395,7 @@ function saveAiAssistantSettings() {
     studentMemory: document.getElementById('ai-student-memory')?.value || '',
     mistakes: document.getElementById('ai-mistakes')?.value || '',
     mode: document.getElementById('ai-mode')?.value || 'lesson-board',
+    provider: document.getElementById('ai-provider')?.value || 'balanced',
   };
   localStorage.setItem(AI_ASSISTANT_STORAGE, JSON.stringify(payload));
   updateAiProviderNote();
@@ -11397,9 +11407,11 @@ function updateAiProviderNote() {
   if (!note) return;
   const saved = JSON.parse(localStorage.getItem(AI_ASSISTANT_STORAGE) || '{}');
   const count = ['teacherMemory','studentMemory','mistakes'].filter(k => String(saved[k] || '').trim()).length;
+  const provider = saved.provider || 'balanced';
+  const route = provider === 'local' ? 'Local only' : provider === 'openrouter' ? 'OpenRouter when configured' : 'Balanced: OpenRouter + local fallback';
   note.textContent = count
-    ? `Memory active: ${count}/3 blocks saved. Generated boards will adapt to your teaching style.`
-    : 'Memory is saved only on this device. The next generated board will adapt to your notes, mistakes and selected mode.';
+    ? `${route} · memory active: ${count}/3 blocks saved. Generated boards will adapt to your teaching style.`
+    : `${route}. Memory stays on this device; every generated response is validated before applying.`;
 }
 
 function clearAiAssistantMemory() {
@@ -11516,7 +11528,7 @@ function applyAiTemplate(kind) {
 
 function getAiAssistantInput() {
   return {
-    provider: 'local-memory',
+    provider: document.getElementById('ai-provider')?.value || 'balanced',
     mode: document.getElementById('ai-mode')?.value || 'lesson-board',
     level: document.getElementById('ai-level')?.value || 'B1',
     duration: document.getElementById('ai-duration')?.value || '45 min',
@@ -11529,6 +11541,15 @@ function getAiAssistantInput() {
     source: document.getElementById('ai-source')?.value.trim() || '',
   };
 }
+
+const AI_INTERNAL_DICTIONARY = {
+  Writing: ['thesis','evidence','counterargument','cohesion','paragraph','example','revise','clarity'],
+  Speaking: ['opinion','follow-up','fluency','intonation','agree','clarify','negotiate','reaction'],
+  Vocabulary: ['collocation','word family','context','meaning','retrieve','sort','synonym','use'],
+  Grammar: ['pattern','form','meaning','auxiliary','word order','contrast','self-correct','accuracy'],
+  Reading: ['predict','gist','detail','inference','scan','evidence','context','summarise'],
+  Listening: ['predict','gist','detail','signpost','intonation','note-taking','confirm','transfer'],
+};
 
 function generateLocalAiLesson(input) {
   const minutes = parseInt(input.duration, 10) || 45;
@@ -11562,7 +11583,8 @@ function generateLocalAiLesson(input) {
     .map(x => x.trim())
     .filter(Boolean)
     .slice(0, 6);
-  const vocabulary = [...new Set([...(words.length ? words : ['claim','reason','example','contrast','conclusion']), ...memoryWords].slice(0, 10))];
+  const skillWords = AI_INTERNAL_DICTIONARY[input.skill] || AI_INTERNAL_DICTIONARY.Writing;
+  const vocabulary = [...new Set([...skillWords, ...(words.length ? words : ['claim','reason','example','contrast','conclusion']), ...memoryWords])].slice(0, 12);
   const memoryHints = [
     input.teacherMemory ? `Teacher style: ${input.teacherMemory}` : '',
     input.studentMemory ? `Class profile: ${input.studentMemory}` : '',
@@ -11652,15 +11674,40 @@ function renderAiAssistantPreview(result) {
 async function runAiAssistant() {
   const status = document.getElementById('ai-status');
   const input = getAiAssistantInput();
-  if (status) status.textContent = 'Generating from local memory...';
   saveAiAssistantSettings();
-  const result = generateLocalAiLesson(input);
+  if (status) status.textContent = input.provider === 'local' ? 'Building a private local plan…' : 'Checking the server route…';
+  let result = null;
+  let remoteError = '';
+  if (input.provider !== 'local' && currentUser && authToken) {
+    try {
+      const response = await apiFetchTimeout('/api/ai/generate', { method: 'POST', body: input }, 14000);
+      const data = await response.json().catch(() => null);
+      if (response.ok && validateAiAssistantResult(data)) result = data;
+      else remoteError = data?.error || `Server returned ${response.status}`;
+    } catch (error) {
+      remoteError = error.name === 'AbortError' ? 'Server timed out' : 'Server unavailable';
+    }
+  } else if (input.provider !== 'local') {
+    remoteError = 'Sign in to use the server route';
+  }
+  if (!result) {
+    result = generateLocalAiLesson(input);
+    result.provider = 'local';
+    if (status) status.textContent = remoteError ? `Local fallback ready · ${remoteError}` : 'Private local preview ready';
+  } else if (status) {
+    const meta = result.meta || {};
+    status.textContent = meta.cached ? 'Validated preview ready · served from cache' : `Validated preview ready · ${result.provider || 'server'}`;
+  }
   renderAiAssistantPreview(result);
-  if (status) status.textContent = 'Preview ready. No API key needed.';
+  return result;
+}
+
+function validateAiAssistantResult(result) {
+  return !!(result && typeof result === 'object' && String(result.title || '').trim().length > 4 && Array.isArray(result.stages) && result.stages.length >= 3 && result.stages.every(stage => stage && String(stage.title || '').trim() && String(stage.activity || '').trim()));
 }
 
 function applyAiAssistantToBoard() {
-  if (!_lastAiAssistantResult) runAiAssistant().then(applyAiAssistantToBoard);
+  if (!_lastAiAssistantResult) { runAiAssistant().then(() => applyAiAssistantToBoard()); return; }
   const result = _lastAiAssistantResult;
   if (!result) return;
   snapshot();

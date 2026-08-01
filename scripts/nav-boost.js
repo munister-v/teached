@@ -90,14 +90,17 @@
   //    (most likely next destinations) ───────────────────────────
   function idlePrefetchVisible() {
     if (lowData) return;
+    // The desktop shell already starts auth, cache hydration and widget work.
+    // Do not compete with that critical path; hover/touch prefetch remains instant.
+    if (/\/(index\.html)?$/.test(location.pathname)) return;
     const links = document.querySelectorAll('a[href]');
     const queue = [];
     links.forEach(a => {
       const u = isInternalNav(a);
       if (u && !PREFETCHED.has(u.pathname + u.search)) queue.push(u);
     });
-    // Cap to 6 to avoid bandwidth thrash
-    queue.slice(0, 6).forEach(u => prefetch(u));
+    // Cap aggressively; links hovered/tapped above still prefetch on demand.
+    queue.slice(0, 2).forEach(u => prefetch(u));
   }
   const ric = window.requestIdleCallback || function (cb) { return setTimeout(cb, 800); };
   ric(idlePrefetchVisible, { timeout: 2500 });
