@@ -534,7 +534,7 @@ body.mobile-tool-sheet-open::after{
 .zc-pct {
   font-size:12px;font-family:var(--mono);font-weight:600;
   color:#444;text-align:center;padding:0 4px;min-width:38px;
-  cursor:pointer;
+  min-height:28px;cursor:pointer;border:0;background:transparent;border-radius:6px;
 }
 [data-theme="dark"] .zc-pct{color:#AAAABB;}
 .zc-pct:hover { color:#4262FF; }
@@ -1345,6 +1345,14 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 }
 .text-rich-editor:empty::before{content:attr(data-placeholder);color:rgba(28,28,30,.35);pointer-events:none;}
 .text-rich-editor a{color:#2563eb;text-decoration:underline;text-underline-offset:2px;}
+.teached-emphasis,
+.text-rich-editor strong u{
+  font-weight:800;
+  text-decoration-line:underline;
+  text-decoration-thickness:.11em;
+  text-underline-offset:.16em;
+  text-decoration-skip-ink:auto;
+}
 .text-close{position:absolute;top:4px;right:4px;opacity:0;transition:opacity .15s;z-index:20;}
 .card-text:hover .text-close,.card-text.selected .text-close{opacity:1;}
 
@@ -2660,6 +2668,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   </div>
   <div id="cascade-sub-view" class="cascade-sub" style="display:none;">
     <div class="cascade-item" onclick="document.getElementById('btn-fit').click();closeBoardMenu()"><span class="ci-ic">⛶</span><span class="ci-lbl">Fit to screen</span><span class="ci-kbd">F</span></div>
+    <div class="cascade-item" onclick="resetBoardView();closeBoardMenu()"><span class="ci-ic">1:1</span><span class="ci-lbl">Reset board zoom</span><span class="ci-kbd">Ctrl+0</span></div>
     <div class="cascade-item" onclick="document.getElementById('btn-zoom-in').click();closeBoardMenu()"><span class="ci-ic">＋</span><span class="ci-lbl">Zoom in</span><span class="ci-kbd">Ctrl++</span></div>
     <div class="cascade-item" onclick="document.getElementById('btn-zoom-out').click();closeBoardMenu()"><span class="ci-ic">−</span><span class="ci-lbl">Zoom out</span><span class="ci-kbd">Ctrl+−</span></div>
     <div class="cascade-sep"></div>
@@ -2918,7 +2927,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
   <button class="zc-btn" title="Zoom out (-)" onclick="document.getElementById('btn-zoom-out').click()">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h8"/></svg>
   </button>
-  <div class="zc-pct" id="zc-pct" title="Reset zoom (click)" onclick="document.getElementById('btn-fit').click()">100%</div>
+  <button type="button" class="zc-pct" id="zc-pct" title="Reset board zoom to 100%" aria-label="Reset board zoom to 100 percent" onclick="resetBoardView()">100%</button>
   <button class="zc-btn" title="Zoom in (+)" onclick="document.getElementById('btn-zoom-in').click()">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h8M8 4v8"/></svg>
   </button>
@@ -3936,6 +3945,14 @@ function zoomAt(sx, sy, factor) {
   applyTransform();
 }
 
+function resetBoardView() {
+  if (_panRaf) { cancelAnimationFrame(_panRaf); _panRaf = null; }
+  state.scale = 1;
+  state.pan = { x: 100, y: 60 };
+  applyTransform();
+  toast('Board zoom reset to 100%');
+}
+
 /* Miro-style zoom to a single card (frame title click) */
 function zoomToCard(cardId, animate) {
   const c = state.cards.find(x => x.id === cardId);
@@ -4559,9 +4576,21 @@ function renderText(el, card) {
   editor.spellcheck = true;
   editor.dataset.placeholder = 'Text';
   editor.innerHTML = card.data.html || textToHtml(card.data.text || card.data.title || 'Text');
+  // Generated lesson copy sometimes arrives with Markdown emphasis. Upgrade it
+  // once into real, editable formatting instead of showing literal **stars**.
+  if (applyTeacherEmphasis(editor, { allowEditable: true })) {
+    card.data.html = editor.innerHTML;
+    card.data.text = editor.innerText;
+  }
   applyTextStyles(card, editor);
 
   editor.addEventListener('input', () => {
+    card.data.html = editor.innerHTML;
+    card.data.text = editor.innerText;
+    scheduleSave();
+  });
+  editor.addEventListener('blur', () => {
+    if (!applyTeacherEmphasis(editor, { allowEditable: true })) return;
     card.data.html = editor.innerHTML;
     card.data.text = editor.innerText;
     scheduleSave();
@@ -5235,6 +5264,14 @@ function renderGame(el, card) {
   iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
   iframe.style.cssText = `width:${naturalW}px;height:${naturalH}px;border:none;display:block;transform-origin:center center;flex-shrink:0;`;
   iframe.dataset.cardId = card.id;
+  iframe.addEventListener('load', () => {
+    // Same-origin lesson/game modules can receive AI copy after their first
+    // paint. Keep upgrading Markdown emphasis as slides/cards are revealed.
+    try {
+      installTeacherEmphasis(iframe.contentDocument);
+      installEmbeddedBoardZoomBridge(iframe);
+    } catch {}
+  });
   body.appendChild(iframe);
 
   const overlay = document.createElement('div');
@@ -5457,7 +5494,84 @@ function refreshAllMilestones() {
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function textToHtml(s){ return esc(s || '').replace(/\n/g,'<br>'); }
+function textToHtml(s){ return esc(s || '').replace(/\*\*([^*\n]+)\*\*/g,'<strong><u>$1</u></strong>').replace(/\n/g,'<br>'); }
+
+function applyTeacherEmphasis(root, options = {}) {
+  if (!root) return false;
+  const doc = root.ownerDocument || root;
+  const scope = root.body || root;
+  const showText = doc.defaultView?.NodeFilter?.SHOW_TEXT || 4;
+  const walker = doc.createTreeWalker(scope, showText);
+  const nodes = [];
+  let node;
+  while ((node = walker.nextNode())) nodes.push(node);
+  let changed = false;
+  nodes.forEach(textNode => {
+    const text = textNode.nodeValue || '';
+    if (!/\*\*[^*\n]+\*\*/.test(text)) return;
+    const parent = textNode.parentElement;
+    if (!parent || parent.closest('script,style,textarea,input,select,option,code,pre')) return;
+    if (!options.allowEditable && parent.closest('[contenteditable="true"]')) return;
+    const fragment = doc.createDocumentFragment();
+    const pattern = /\*\*([^*\n]+)\*\*/g;
+    let cursor = 0;
+    let match;
+    while ((match = pattern.exec(text))) {
+      if (match.index > cursor) fragment.appendChild(doc.createTextNode(text.slice(cursor, match.index)));
+      const strong = doc.createElement('strong');
+      const underline = doc.createElement('u');
+      strong.className = 'teached-emphasis';
+      underline.textContent = match[1];
+      strong.appendChild(underline);
+      fragment.appendChild(strong);
+      cursor = pattern.lastIndex;
+    }
+    if (cursor < text.length) fragment.appendChild(doc.createTextNode(text.slice(cursor)));
+    textNode.replaceWith(fragment);
+    changed = true;
+  });
+  return changed;
+}
+
+function installTeacherEmphasis(doc) {
+  const body = doc?.body;
+  if (!body || body.dataset.teachedEmphasisReady === '1') return;
+  body.dataset.teachedEmphasisReady = '1';
+  const style = doc.createElement('style');
+  style.dataset.teachedEmphasisStyle = '1';
+  style.textContent = '.teached-emphasis,.teached-emphasis u{font-weight:800;text-decoration-line:underline;text-decoration-thickness:.11em;text-underline-offset:.16em;text-decoration-skip-ink:auto;}';
+  doc.head?.appendChild(style);
+  applyTeacherEmphasis(body);
+  let queued = false;
+  const ViewMutationObserver = doc.defaultView?.MutationObserver || MutationObserver;
+  const scheduleFrame = doc.defaultView?.requestAnimationFrame?.bind(doc.defaultView) || requestAnimationFrame;
+  const observer = new ViewMutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    scheduleFrame(() => {
+      queued = false;
+      applyTeacherEmphasis(body);
+    });
+  });
+  observer.observe(body, { childList: true, subtree: true, characterData: true });
+}
+
+function wheelZoomFactor(event) {
+  const intensity = Math.min(Math.abs(event.deltaY), 20);
+  return event.deltaY < 0 ? (1 + intensity * 0.008) : (1 / (1 + intensity * 0.008));
+}
+
+function installEmbeddedBoardZoomBridge(iframe) {
+  const doc = iframe?.contentDocument;
+  if (!doc || doc.documentElement.dataset.teachedBoardZoomBridge === '1') return;
+  doc.documentElement.dataset.teachedBoardZoomBridge = '1';
+  doc.addEventListener('wheel', event => {
+    if (!(event.ctrlKey || event.metaKey) || isFollowingTeacher) return;
+    event.preventDefault();
+    const iframeRect = iframe.getBoundingClientRect();
+    zoomAt(iframeRect.left + event.clientX, iframeRect.top + event.clientY, wheelZoomFactor(event));
+  }, { passive: false, capture: true });
+}
 
 function textFontOptions() {
   return [
@@ -7186,15 +7300,25 @@ document.addEventListener('mouseup', e => {
 })();
 
 /* ════════════════════════ ZOOM — Miro-style ════════════════════════ */
+// Capture browser-level pinch/Ctrl+wheel everywhere on the board page. Without
+// this guard, starting the gesture over a fixed toolbar zooms the entire page
+// and makes the left tool rail grow together with the canvas.
+document.addEventListener('wheel', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  if (boardWrap.contains(e.target)) return; // handled below at the real pointer
+  if (isFollowingTeacher) return;
+  const center = getBoardViewportCenterScreen();
+  zoomAt(center.x, center.y, wheelZoomFactor(e));
+}, { passive: false, capture: true });
+
 boardWrap.addEventListener('wheel', e => {
   e.preventDefault();
   if (isFollowingTeacher) return;
 
   // Ctrl/Cmd+scroll or trackpad pinch = zoom
   if (e.ctrlKey || e.metaKey) {
-    const intensity = Math.min(Math.abs(e.deltaY), 20);
-    const factor = e.deltaY < 0 ? (1 + intensity * 0.008) : (1 / (1 + intensity * 0.008));
-    zoomAt(e.clientX, e.clientY, factor);
+    zoomAt(e.clientX, e.clientY, wheelZoomFactor(e));
     return;
   }
 
@@ -7263,6 +7387,18 @@ document.addEventListener('pointerdown', e => {
 
 window.addEventListener('keydown', handleBoardPasteShortcut, true);
 
+// Keep keyboard zoom scoped to the canvas as well. This capture handler runs
+// even when focus happens to be inside a toolbar input.
+window.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const key = String(e.key || '');
+  if (!['+', '=', '-', '_'].includes(key)) return;
+  e.preventDefault();
+  if (isFollowingTeacher) return;
+  const center = getBoardViewportCenterScreen();
+  zoomAt(center.x, center.y, (key === '+' || key === '=') ? 1.2 : (1 / 1.2));
+}, true);
+
 document.addEventListener('keydown', e => {
   if (isBoardTypingTarget(e.target)) return;
   if (e.__teachedPasteShortcutSeen) return;
@@ -7292,7 +7428,7 @@ document.addEventListener('keydown', e => {
     handleBoardPasteShortcut(e);
     return;
   }
-  if ((e.ctrlKey||e.metaKey) && e.key === '0') { state.scale=1; state.pan={x:100,y:60}; applyTransform(); return; }
+  if ((e.ctrlKey||e.metaKey) && e.key === '0') { resetBoardView(); return; }
   if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'f')) { e.preventDefault(); toggleBoardSearch(); return; }
   if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'h')) { e.preventDefault(); openVersionHistory(); return; }
   if ((e.ctrlKey||e.metaKey) && boardShortcut(e, 'g') && !e.shiftKey) { e.preventDefault(); groupSelected(); return; }
