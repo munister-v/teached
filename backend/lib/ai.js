@@ -1,7 +1,8 @@
 const crypto = require('crypto');
 
-const MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
 const BASE_URL = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+const MODEL_TTL = Math.max(15 * 60_000, Number(process.env.OPENROUTER_MODEL_TTL_MS || 21_600_000));
+const MAX_MODEL_COST = Number(process.env.OPENROUTER_MAX_COST || 0.8);
 const TTL = Math.max(30_000, Number(process.env.AI_CACHE_TTL_MS || 600_000));
 const MAX_CACHE = Math.max(8, Number(process.env.AI_CACHE_MAX || 64));
 const WINDOW = 10 * 60 * 1000;
@@ -9,6 +10,8 @@ const MAX_REQUESTS = Math.max(1, Number(process.env.AI_MAX_REQUESTS || 8));
 const cache = new Map();
 const usage = new Map();
 const pending = new Map();
+let modelCatalog = { expires: 0, models: [] };
+let modelCatalogPromise = null;
 
 const DICTIONARY = {
   Writing: ['thesis', 'evidence', 'counterargument', 'cohesion', 'paragraph', 'example', 'revise', 'clarity'],
@@ -120,7 +123,58 @@ function promptFor(input) {
   return `Create a practical ${input.duration} ${input.level} English ${input.skill} lesson for ${input.audience}. Topic: ${input.topic}. Mode: ${input.mode}. Teacher memory: ${input.teacherMemory || 'none'}. Student memory: ${input.studentMemory || 'none'}. Mistakes: ${input.mistakes || 'none'}. Source: ${input.source || 'none'}. Return ONLY valid JSON with keys title, summary, stages (array of 5 objects with time,title,goal,activity), vocabulary (array), warmupPrompts (array), assessmentCriteria (array), homework, teacherTip, mistakeItems (array), memoryHints (array). Keep activities concrete, age-appropriate and non-repetitive.`;
 }
 
-async function callOpenRouter(input) {
+function numericCost(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : 99;
+}
+
+function modelScore(model, input) {
+  const id = String(model.id || '').toLowerCase();
+  const prompt = numericCost(model.pricing?.prompt);
+  const completion = numericCost(model.pricing?.completion);
+  const context = Number(model.context_length || 0);
+  if (prompt > MAX_MODEL_COST || completion > MAX_MODEL_COST || context < 4000) return -Infinity;
+  // Prefer small, instruction-following models for lesson JSON. The score deliberately
+  // rewards low price first, then context and known reliable families.
+  let score = 100 - (prompt * 40 + completion * 80);
+  if (/free|:free$/.test(id)) score += 16;
+  if (/flash|mini|small|haiku|8b|7b|instruct/.test(id)) score += 12;
+  if (/gemini|qwen|llama|mistral|deepseek/.test(id)) score += 5;
+  if (/vision|audio|tts|embedding|image|guard|moderation/.test(id)) score -= 80;
+  if (input.source.length > 900 && context >= 16000) score += 8;
+  if (input.skill === 'Writing' && /qwen|gemini|llama/.test(id)) score += 3;
+  return score;
+}
+
+async function fetchModelCatalog() {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) return [];
+  if (modelCatalog.expires > Date.now()) return modelCatalog.models;
+  if (modelCatalogPromise) return modelCatalogPromise;
+  modelCatalogPromise = fetch(`${BASE_URL}/models`, {
+    headers: { Authorization: `Bearer ${key}`, 'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'https://teached.tech', 'X-Title': process.env.OPENROUTER_TITLE || 'TeachEd' },
+    signal: AbortSignal.timeout(5000),
+  }).then(response => response.ok ? response.json() : { data: [] })
+    .then(payload => {
+      modelCatalog.models = Array.isArray(payload.data) ? payload.data : [];
+      modelCatalog.expires = Date.now() + MODEL_TTL;
+      return modelCatalog.models;
+    }).catch(() => modelCatalog.models)
+    .finally(() => { modelCatalogPromise = null; });
+  return modelCatalogPromise;
+}
+
+async function chooseModel(input) {
+  const forced = String(process.env.OPENROUTER_MODEL || '').trim();
+  if (forced) return forced;
+  const models = await fetchModelCatalog();
+  const ranked = models.map(model => ({ model, score: modelScore(model, input) }))
+    .filter(item => item.score > -Infinity)
+    .sort((a, b) => b.score - a.score);
+  return ranked[0]?.model?.id || 'google/gemini-2.0-flash-001';
+}
+
+async function callOpenRouter(input, model) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -130,14 +184,14 @@ async function callOpenRouter(input) {
       const response = await fetch(`${BASE_URL}/chat/completions`, {
         method: 'POST', signal: controller.signal,
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'https://teached.tech', 'X-Title': process.env.OPENROUTER_TITLE || 'TeachEd' },
-        body: JSON.stringify({ model: MODEL, temperature: 0.2, max_tokens: 1400, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'You are a careful curriculum designer. Never invent unsafe or discriminatory content. Output compact, valid JSON only.' }, { role: 'user', content: promptFor(input) }] }),
+        body: JSON.stringify({ model, temperature: 0.2, max_tokens: 1400, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'You are a careful curriculum designer. Never invent unsafe or discriminatory content. Output compact, valid JSON only.' }, { role: 'user', content: promptFor(input) }] }),
       });
       if (response.ok) {
         const data = await response.json();
         const text = data?.choices?.[0]?.message?.content;
         if (!text) return null;
         const parsed = JSON.parse(String(text).replace(/^```json\s*|\s*```$/g, ''));
-        return validLesson(parsed) ? { ...parsed, provider: 'openrouter', meta: { provider: 'openrouter', model: MODEL, cached: false, usage: data.usage || null } } : null;
+        return validLesson(parsed) ? { ...parsed, provider: 'openrouter', meta: { provider: 'openrouter', model, cached: false, usage: data.usage || null } } : null;
       }
       // Retry only transient upstream failures; never spend twice on a bad request or rate limit.
       if (response.status < 500 || attempt === 1) return null;
@@ -152,15 +206,16 @@ async function callOpenRouter(input) {
 async function generateLesson(raw, userId = 'anonymous') {
   const input = normalizeInput(raw);
   if (!allow(userId)) { const err = new Error('AI rate limit reached. Try again in a few minutes.'); err.code = 'AI_RATE_LIMIT'; throw err; }
-  const key = crypto.createHash('sha256').update(JSON.stringify({ ...input, model: MODEL })).digest('hex');
+  const model = input.provider === 'local' ? 'local' : await chooseModel(input);
+  const key = crypto.createHash('sha256').update(JSON.stringify({ ...input, model })).digest('hex');
   const cached = cacheGet(key); if (cached) return cached;
   if (pending.has(key)) return pending.get(key);
   const task = (async () => {
     let result = null;
-    if (input.provider !== 'local') result = await callOpenRouter(input);
+    if (input.provider !== 'local') result = await callOpenRouter(input, model);
     if (!result) {
       result = localLesson(input);
-      result.meta = { provider: 'local', model: null, cached: false, fallback: input.provider !== 'local' && Boolean(process.env.OPENROUTER_API_KEY) };
+      result.meta = { provider: 'local', model: null, cached: false, fallback: input.provider !== 'local' && Boolean(process.env.OPENROUTER_API_KEY), selectedModel: model };
     }
     cacheSet(key, result); return result;
   })();
@@ -168,6 +223,6 @@ async function generateLesson(raw, userId = 'anonymous') {
   try { return await task; } finally { pending.delete(key); }
 }
 
-function status() { return { configured: Boolean(process.env.OPENROUTER_API_KEY), model: MODEL, localFallback: true, cache: cache.size }; }
+function status() { return { configured: Boolean(process.env.OPENROUTER_API_KEY), model: process.env.OPENROUTER_MODEL || 'auto', localFallback: true, cache: cache.size, catalogFresh: modelCatalog.expires > Date.now(), catalogSize: modelCatalog.models.length }; }
 
 module.exports = { generateLesson, status, normalizeInput, localLesson };
