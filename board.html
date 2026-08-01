@@ -1989,6 +1989,8 @@ body.board-dragging .board-card{will-change:transform,left,top;}
 .ai-card ul{margin:0;padding-left:18px;}
 .ai-action-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;}
 .ai-action{border:0;border-radius:14px;background:#caff32;color:#101010;font-weight:950;padding:11px 15px;cursor:pointer;}
+.ai-action:focus-visible{outline:3px solid rgba(99,102,241,.42);outline-offset:2px;}
+.ai-action:disabled{cursor:wait;filter:saturate(.55);}
 .ai-action.secondary{background:#111018;color:#fff;}
 .ai-action.ghost{background:rgba(17,24,39,.08);color:#171420;}
 .ai-builder{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(320px,1.1fr);gap:16px;margin-top:18px;}
@@ -3139,6 +3141,13 @@ body.board-dragging .board-card{will-change:transform,left,top;}
           <option value="local">Local only — private + free</option>
           <option value="openrouter">OpenRouter — server configured</option>
         </select>
+        <label for="ai-layout">Board layout</label>
+        <select id="ai-layout">
+          <option value="auto" selected>Auto — choose from content</option>
+          <option value="timeline">Timeline — left to right</option>
+          <option value="workshop">Workshop — stages + resources</option>
+          <option value="compact">Compact — small board footprint</option>
+        </select>
         <label>Quick templates</label>
         <div class="ai-template-grid">
           <button class="ai-template-btn" type="button" onclick="applyAiTemplate('ielts-writing')">IELTS writing <span>argument, examples, rubric</span></button>
@@ -3164,14 +3173,14 @@ body.board-dragging .board-card{will-change:transform,left,top;}
         </div>
         <div class="ai-memory-note" id="ai-memory-note">Memory is saved only on this device. The next generated board will adapt to your notes, mistakes and selected mode.</div>
         <div class="ai-action-row">
-          <button class="ai-action" onclick="runAiAssistant()">Generate preview</button>
-          <button class="ai-action secondary" onclick="applyAiAssistantToBoard()">Apply to board</button>
+          <button class="ai-action" id="ai-generate-btn" onclick="runAiAssistant()">Generate preview</button>
+          <button class="ai-action secondary" id="ai-apply-btn" onclick="applyAiAssistantToBoard()">Apply to board</button>
           <button class="ai-action ghost" onclick="useSelectedCardsForAi()">Use selected</button>
           <button class="ai-action ghost" onclick="addAiMemoryFromBoard()">Learn board</button>
           <button class="ai-action ghost" onclick="saveAiAssistantSettings()">Save memory</button>
           <button class="ai-action ghost" onclick="clearAiAssistantMemory()">Clear memory</button>
         </div>
-        <div class="ai-status" id="ai-status"></div>
+        <div class="ai-status" id="ai-status" aria-live="polite"></div>
       </div>
       <div class="ai-preview">
         <div class="ai-preview-head">
@@ -11377,6 +11386,18 @@ document.getElementById('ai-assistant-panel')?.addEventListener('click', e => {
 
 const AI_ASSISTANT_STORAGE = 'teached.aiAssistant.settings.v1';
 let _lastAiAssistantResult = null;
+let _aiGenerateBusy = false;
+let _aiApplyBusy = false;
+
+function setAiActionBusy(id, busy, busyLabel, idleLabel) {
+  const button = document.getElementById(id);
+  if (!button) return;
+  button.disabled = busy;
+  button.setAttribute('aria-busy', busy ? 'true' : 'false');
+  button.textContent = busy ? busyLabel : idleLabel;
+  button.style.opacity = busy ? '.62' : '';
+  button.style.cursor = busy ? 'wait' : '';
+}
 
 function loadAiAssistantSettings() {
   try {
@@ -11386,6 +11407,7 @@ function loadAiAssistantSettings() {
     if (saved.mistakes) document.getElementById('ai-mistakes').value = saved.mistakes;
     if (saved.mode) document.getElementById('ai-mode').value = saved.mode;
     if (saved.provider) document.getElementById('ai-provider').value = saved.provider;
+    if (saved.layout) document.getElementById('ai-layout').value = saved.layout;
   } catch {}
 }
 
@@ -11396,6 +11418,7 @@ function saveAiAssistantSettings() {
     mistakes: document.getElementById('ai-mistakes')?.value || '',
     mode: document.getElementById('ai-mode')?.value || 'lesson-board',
     provider: document.getElementById('ai-provider')?.value || 'balanced',
+    layout: document.getElementById('ai-layout')?.value || 'auto',
   };
   localStorage.setItem(AI_ASSISTANT_STORAGE, JSON.stringify(payload));
   updateAiProviderNote();
@@ -11529,6 +11552,7 @@ function applyAiTemplate(kind) {
 function getAiAssistantInput() {
   return {
     provider: document.getElementById('ai-provider')?.value || 'balanced',
+    layout: document.getElementById('ai-layout')?.value || 'auto',
     mode: document.getElementById('ai-mode')?.value || 'lesson-board',
     level: document.getElementById('ai-level')?.value || 'B1',
     duration: document.getElementById('ai-duration')?.value || '45 min',
@@ -11691,6 +11715,9 @@ function renderAiAssistantPreview(result) {
 }
 
 async function runAiAssistant() {
+  if (_aiGenerateBusy) return _lastAiAssistantResult;
+  _aiGenerateBusy = true;
+  setAiActionBusy('ai-generate-btn', true, 'Generating…', 'Generate preview');
   const status = document.getElementById('ai-status');
   const input = getAiAssistantInput();
   saveAiAssistantSettings();
@@ -11718,6 +11745,8 @@ async function runAiAssistant() {
     status.textContent = meta.cached ? 'Validated preview ready · served from cache' : `Validated preview ready · ${result.provider || 'server'}`;
   }
   renderAiAssistantPreview(result);
+  _aiGenerateBusy = false;
+  setAiActionBusy('ai-generate-btn', false, 'Generating…', 'Generate preview');
   return result;
 }
 
@@ -11726,8 +11755,10 @@ function validateAiAssistantResult(result) {
 }
 
 function aiSmartLayout(center, result) {
-  const width = 1240;
-  const height = 900;
+  let style = document.getElementById('ai-layout')?.value || 'auto';
+  if (style === 'auto') style = result.mode === 'quick-activities' || result.mode === 'game-pack' ? 'timeline' : result.mode === 'homework-pack' ? 'compact' : 'workshop';
+  const dimensions = style === 'timeline' ? { width: 1700, height: 720 } : style === 'compact' ? { width: 1040, height: 940 } : { width: 1240, height: 900 };
+  const { width, height } = dimensions;
   const gap = 22;
   const base = { x: center.x - width / 2, y: center.y - height / 2 };
   const overlapsExisting = (rect) => state.cards.some(card => {
@@ -11738,26 +11769,53 @@ function aiSmartLayout(center, result) {
   const candidates = [[0, 0], [0, height + 80], [width + 80, 0], [-width - 80, 0], [0, -height - 80], [width + 80, height + 80], [-width - 80, height + 80]];
   const shift = candidates.find(([dx, dy]) => !overlapsExisting({ x: base.x + dx, y: base.y + dy, w: width, h: height })) || [0, 0];
   const x = base.x + shift[0]; const y = base.y + shift[1];
-  const layout = { frame: { x, y, w: width, h: height }, lesson: { x: x + 28, y: y + 28, w: 360, h: 290 } };
-  (result.stages || []).slice(0, 5).forEach((_, idx) => {
-    layout[`stage${idx}`] = { x: x + 420 + (idx % 2) * 300, y: y + 28 + Math.floor(idx / 2) * 138, w: 280, h: 116 };
-  });
-  layout.vocabulary = { x: x + 28, y: y + 342, w: 360, h: 230 };
-  layout.memory = { x: x + 28, y: y + 596, w: 360, h: 170 };
-  layout.extras = { x: x + 1030, y: y + 28, w: 180, h: 170 };
-  layout.warmup = { x: x + 1030, y: y + 220, w: 180, h: 190 };
-  layout.criteria = { x: x + 1030, y: y + 432, w: 180, h: 190 };
-  layout.homework = { x: x + 420, y: y + 470, w: 580, h: 170 };
-  layout.teacher = { x: x + 420, y: y + 676, w: 360, h: 170 };
-  layout.challenge = { x: x + 804, y: y + 676, w: 406, h: 150 };
+  const layout = { style, frame: { x, y, w: width, h: height } };
+  if (style === 'timeline') {
+    layout.lesson = { x: x + 28, y: y + 28, w: 320, h: 270 };
+    (result.stages || []).slice(0, 5).forEach((_, idx) => { layout[`stage${idx}`] = { x: x + 380 + idx * 254, y: y + 28, w: 230, h: 150 }; });
+    layout.vocabulary = { x: x + 28, y: y + 326, w: 320, h: 230 };
+    layout.memory = { x: x + 28, y: y + 580, w: 320, h: 110 };
+    layout.extras = { x: x + 380, y: y + 210, w: 230, h: 170 };
+    layout.warmup = { x: x + 634, y: y + 210, w: 230, h: 170 };
+    layout.criteria = { x: x + 888, y: y + 210, w: 230, h: 170 };
+    layout.homework = { x: x + 1142, y: y + 210, w: 530, h: 170 };
+    layout.teacher = { x: x + 380, y: y + 414, w: 600, h: 210 };
+    layout.challenge = { x: x + 1004, y: y + 414, w: 668, h: 180 };
+  } else if (style === 'compact') {
+    layout.lesson = { x: x + 28, y: y + 28, w: 330, h: 270 };
+    (result.stages || []).slice(0, 5).forEach((_, idx) => { layout[`stage${idx}`] = { x: x + 384 + (idx % 2) * 306, y: y + 28 + Math.floor(idx / 2) * 132, w: 282, h: 110 }; });
+    layout.vocabulary = { x: x + 28, y: y + 324, w: 330, h: 220 };
+    layout.memory = { x: x + 28, y: y + 570, w: 330, h: 160 };
+    layout.extras = { x: x + 384, y: y + 438, w: 282, h: 160 };
+    layout.warmup = { x: x + 690, y: y + 438, w: 322, h: 160 };
+    layout.criteria = { x: x + 28, y: y + 754, w: 330, h: 154 };
+    layout.homework = { x: x + 384, y: y + 624, w: 628, h: 150 };
+    layout.teacher = { x: x + 384, y: y + 798, w: 360, h: 110 };
+    layout.challenge = { x: x + 768, y: y + 798, w: 244, h: 110 };
+  } else {
+    layout.lesson = { x: x + 28, y: y + 28, w: 360, h: 290 };
+    (result.stages || []).slice(0, 5).forEach((_, idx) => { layout[`stage${idx}`] = { x: x + 420 + (idx % 2) * 300, y: y + 28 + Math.floor(idx / 2) * 138, w: 280, h: 116 }; });
+    layout.vocabulary = { x: x + 28, y: y + 342, w: 360, h: 230 };
+    layout.memory = { x: x + 28, y: y + 596, w: 360, h: 170 };
+    layout.extras = { x: x + 1030, y: y + 28, w: 180, h: 170 };
+    layout.warmup = { x: x + 1030, y: y + 220, w: 180, h: 190 };
+    layout.criteria = { x: x + 1030, y: y + 432, w: 180, h: 190 };
+    layout.homework = { x: x + 420, y: y + 470, w: 580, h: 170 };
+    layout.teacher = { x: x + 420, y: y + 676, w: 360, h: 170 };
+    layout.challenge = { x: x + 804, y: y + 676, w: 406, h: 150 };
+  }
   return layout;
 }
 
 function applyAiAssistantToBoard() {
   if (!_lastAiAssistantResult) { runAiAssistant().then(() => applyAiAssistantToBoard()); return; }
+  if (_aiApplyBusy) return;
   const result = _lastAiAssistantResult;
   if (!result) return;
+  _aiApplyBusy = true;
+  setAiActionBusy('ai-apply-btn', true, 'Applying…', 'Apply to board');
   snapshot();
+  const beforeCardIds = new Set(state.cards.map(card => card.id));
   const center = screenToBoard(window.innerWidth * .52, window.innerHeight * .48) || { x: 300, y: 220 };
   const layout = aiSmartLayout(center, result);
   const frame = addCard('frame', layout.frame.x, layout.frame.y, {
@@ -11850,7 +11908,7 @@ function applyAiAssistantToBoard() {
   }
   if (frame?.id && frame.data) {
     frame.data.childIds = state.cards
-      .filter(c => c.id !== frame.id && c.x >= frame.x && c.y >= frame.y && c.x <= frame.x + frame.w && c.y <= frame.y + frame.h)
+      .filter(c => c.id !== frame.id && !beforeCardIds.has(c.id))
       .map(c => c.id);
   }
   clearSelection();
@@ -11858,7 +11916,10 @@ function applyAiAssistantToBoard() {
   renderAllArrows?.();
   scheduleSave(); saveLocal?.();
   closeAiAssistantPanel();
-  toast('AI lesson flow added to board');
+  _aiApplyBusy = false;
+  setAiActionBusy('ai-apply-btn', false, 'Applying…', 'Apply to board');
+  if (frame?.id) setTimeout(() => zoomToCard(frame.id, true), 90);
+  toast(`AI lesson flow added · ${layout.style} layout`);
 }
 
 function aiAssistantPreviewText() {
