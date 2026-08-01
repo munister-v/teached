@@ -12,6 +12,7 @@ const usage = new Map();
 const pending = new Map();
 let modelCatalog = { expires: 0, models: [] };
 let modelCatalogPromise = null;
+const modelHealth = new Map();
 
 const DICTIONARY = {
   Writing: ['thesis', 'evidence', 'counterargument', 'cohesion', 'paragraph', 'example', 'revise', 'clarity'],
@@ -97,7 +98,9 @@ function localLesson(raw) {
 }
 
 function validLesson(result) {
-  return result && typeof result === 'object' && clean(result.title, 240).length > 4 && Array.isArray(result.stages) && result.stages.length >= 3 && result.stages.every(s => s && clean(s.title, 120) && clean(s.activity, 600));
+  if (!(result && typeof result === 'object' && clean(result.title, 240).length > 4 && Array.isArray(result.stages) && result.stages.length >= 3 && result.stages.every(s => s && clean(s.title, 120) && clean(s.activity, 600)))) return false;
+  const text = [result.title, result.summary, ...result.stages.map(s => `${s.title} ${s.goal || ''} ${s.activity}`), ...(result.vocabulary || [])].join(' ');
+  return text.length >= 420 && new Set(result.stages.map(s => clean(s.title, 100).toLowerCase())).size >= Math.min(4, result.stages.length);
 }
 
 function cacheGet(key) {
@@ -143,6 +146,9 @@ function modelScore(model, input) {
   if (/vision|audio|tts|embedding|image|guard|moderation/.test(id)) score -= 80;
   if (input.source.length > 900 && context >= 16000) score += 8;
   if (input.skill === 'Writing' && /qwen|gemini|llama/.test(id)) score += 3;
+  const health = modelHealth.get(model.id);
+  if (health && health.cooldownUntil > Date.now()) return -Infinity;
+  if (health) score -= Math.min(20, health.failures * 4);
   return score;
 }
 
@@ -174,6 +180,29 @@ async function chooseModel(input) {
   return ranked[0]?.model?.id || 'google/gemini-2.0-flash-001';
 }
 
+async function chooseModels(input) {
+  const forced = String(process.env.OPENROUTER_MODEL || '').trim();
+  if (forced) return [forced];
+  const models = await fetchModelCatalog();
+  return models.map(model => ({ model, score: modelScore(model, input) }))
+    .filter(item => item.score > -Infinity)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(item => item.model.id);
+}
+
+function markModel(model, ok) {
+  const current = modelHealth.get(model) || { failures: 0, cooldownUntil: 0 };
+  if (ok) {
+    current.failures = Math.max(0, current.failures - 1);
+    current.cooldownUntil = 0;
+  } else {
+    current.failures += 1;
+    current.cooldownUntil = Date.now() + Math.min(30 * 60_000, 30_000 * (2 ** Math.min(current.failures, 6)));
+  }
+  modelHealth.set(model, current);
+}
+
 async function callOpenRouter(input, model) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return null;
@@ -191,13 +220,15 @@ async function callOpenRouter(input, model) {
         const text = data?.choices?.[0]?.message?.content;
         if (!text) return null;
         const parsed = JSON.parse(String(text).replace(/^```json\s*|\s*```$/g, ''));
-        return validLesson(parsed) ? { ...parsed, provider: 'openrouter', meta: { provider: 'openrouter', model, cached: false, usage: data.usage || null } } : null;
+        if (!validLesson(parsed)) { markModel(model, false); return null; }
+        markModel(model, true);
+        return { ...parsed, provider: 'openrouter', meta: { provider: 'openrouter', model, cached: false, usage: data.usage || null } };
       }
       // Retry only transient upstream failures; never spend twice on a bad request or rate limit.
-      if (response.status < 500 || attempt === 1) return null;
+      if (response.status < 500 || attempt === 1) { markModel(model, false); return null; }
       await new Promise(resolve => setTimeout(resolve, 220));
     } catch {
-      if (attempt === 1) return null;
+      if (attempt === 1) { markModel(model, false); return null; }
     } finally { clearTimeout(timer); }
   }
   return null;
@@ -206,13 +237,20 @@ async function callOpenRouter(input, model) {
 async function generateLesson(raw, userId = 'anonymous') {
   const input = normalizeInput(raw);
   if (!allow(userId)) { const err = new Error('AI rate limit reached. Try again in a few minutes.'); err.code = 'AI_RATE_LIMIT'; throw err; }
-  const model = input.provider === 'local' ? 'local' : await chooseModel(input);
+  const models = input.provider === 'local' ? ['local'] : (await chooseModels(input));
+  if (!models.length && input.provider !== 'local') models.push(await chooseModel(input));
+  const model = models[0];
   const key = crypto.createHash('sha256').update(JSON.stringify({ ...input, model })).digest('hex');
   const cached = cacheGet(key); if (cached) return cached;
   if (pending.has(key)) return pending.get(key);
   const task = (async () => {
     let result = null;
-    if (input.provider !== 'local') result = await callOpenRouter(input, model);
+    if (input.provider !== 'local') {
+      for (const candidate of models) {
+        result = await callOpenRouter(input, candidate);
+        if (result) break;
+      }
+    }
     if (!result) {
       result = localLesson(input);
       result.meta = { provider: 'local', model: null, cached: false, fallback: input.provider !== 'local' && Boolean(process.env.OPENROUTER_API_KEY), selectedModel: model };
