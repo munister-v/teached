@@ -716,6 +716,10 @@ body.alt-duplicating *{cursor:copy!important;}
 }
 .frame-color-swatch:hover{transform:scale(1.18);box-shadow:0 2px 8px rgba(0,0,0,.18);}
 .frame-color-swatch.active{box-shadow:0 0 0 2px #4262FF,0 2px 6px rgba(66,98,255,.25)!important;transform:scale(1.1);}
+.ai-frame-layout-row{display:flex;align-items:center;gap:5px;padding:7px 8px;border-top:1px solid var(--border);}
+.ai-frame-layout-row button{min-width:44px;min-height:34px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg,white);color:var(--text-2);font:800 10px/1 var(--font);cursor:pointer;padding:0 8px;}
+.ai-frame-layout-row button:hover,.ai-frame-layout-row button.active{border-color:#6366f1;background:rgba(99,102,241,.10);color:#4338ca;}
+.ai-frame-layout-row button:focus-visible{outline:3px solid rgba(99,102,241,.32);outline-offset:1px;}
 
 /* Private mode */
 .card-private-mine{
@@ -3830,6 +3834,7 @@ const state = {
 
 /* undo/redo stacks */
 const undoStack = [], redoStack = [];
+let _snapshotSuspendDepth = 0;
 
 /* ════════════════════════ DOM refs ════════════════════════ */
 const boardWrap  = document.getElementById('board-wrap');
@@ -4003,6 +4008,7 @@ function fitAll(animate) {
 
 /* ════════════════════════ UNDO / REDO ════════════════════════ */
 function snapshot() {
+  if (_snapshotSuspendDepth > 0) return;
   undoStack.push(serialize());
   if (undoStack.length > 60) undoStack.shift();
   redoStack.length = 0;
@@ -6459,6 +6465,7 @@ function showLayerPopover(cardId) {
 
   // Add / refresh frame color row
   let colorRow = pop.querySelector('.frame-color-row');
+  let aiLayoutRow = pop.querySelector('.ai-frame-layout-row');
   if (card?.type === 'frame') {
     if (!colorRow) {
       colorRow = document.createElement('div');
@@ -6491,8 +6498,26 @@ function showLayerPopover(cardId) {
       });
       colorRow.appendChild(sw);
     });
+    if (card.data?.aiGenerated) {
+      if (!aiLayoutRow) {
+        aiLayoutRow = document.createElement('div');
+        aiLayoutRow.className = 'ai-frame-layout-row';
+        pop.appendChild(aiLayoutRow);
+      }
+      aiLayoutRow.innerHTML = '';
+      [['auto','Auto'],['timeline','Timeline'],['workshop','Workshop'],['compact','Compact']].forEach(([value, label]) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.title = `Reflow AI lesson as ${label}`;
+        button.classList.toggle('active', (card.data.aiLayout || 'workshop') === value);
+        button.onclick = event => { event.stopPropagation(); reflowAiFrame(card.id, value); };
+        aiLayoutRow.appendChild(button);
+      });
+    } else if (aiLayoutRow) aiLayoutRow.remove();
   } else if (colorRow) {
     colorRow.remove();
+    if (aiLayoutRow) aiLayoutRow.remove();
   }
 
   let stickyRow = pop.querySelector('.sticky-layer-colors');
@@ -11754,14 +11779,15 @@ function validateAiAssistantResult(result) {
   return !!(result && typeof result === 'object' && String(result.title || '').trim().length > 4 && Array.isArray(result.stages) && result.stages.length >= 3 && result.stages.every(stage => stage && String(stage.title || '').trim() && String(stage.activity || '').trim()));
 }
 
-function aiSmartLayout(center, result) {
-  let style = document.getElementById('ai-layout')?.value || 'auto';
+function aiSmartLayout(center, result, forcedStyle, ignoreIds = new Set()) {
+  let style = forcedStyle || document.getElementById('ai-layout')?.value || 'auto';
   if (style === 'auto') style = result.mode === 'quick-activities' || result.mode === 'game-pack' ? 'timeline' : result.mode === 'homework-pack' ? 'compact' : 'workshop';
-  const dimensions = style === 'timeline' ? { width: 1700, height: 720 } : style === 'compact' ? { width: 1040, height: 940 } : { width: 1240, height: 900 };
+  const dimensions = style === 'timeline' ? { width: 1700, height: 900 } : style === 'compact' ? { width: 1040, height: 1120 } : { width: 1240, height: 1100 };
   const { width, height } = dimensions;
   const gap = 22;
   const base = { x: center.x - width / 2, y: center.y - height / 2 };
   const overlapsExisting = (rect) => state.cards.some(card => {
+    if (ignoreIds.has(card.id)) return false;
     const right = card.x + (card.w || 220); const bottom = card.y + (card.h || 150);
     return rect.x < right + gap && rect.x + rect.w > card.x - gap && rect.y < bottom + gap && rect.y + rect.h > card.y - gap;
   });
@@ -11781,6 +11807,8 @@ function aiSmartLayout(center, result) {
     layout.homework = { x: x + 1142, y: y + 210, w: 530, h: 170 };
     layout.teacher = { x: x + 380, y: y + 414, w: 600, h: 210 };
     layout.challenge = { x: x + 1004, y: y + 414, w: 668, h: 180 };
+    layout.differentiation = { x: x + 380, y: y + 650, w: 600, h: 210 };
+    layout.checks = { x: x + 1004, y: y + 650, w: 668, h: 210 };
   } else if (style === 'compact') {
     layout.lesson = { x: x + 28, y: y + 28, w: 330, h: 270 };
     (result.stages || []).slice(0, 5).forEach((_, idx) => { layout[`stage${idx}`] = { x: x + 384 + (idx % 2) * 306, y: y + 28 + Math.floor(idx / 2) * 132, w: 282, h: 110 }; });
@@ -11792,6 +11820,8 @@ function aiSmartLayout(center, result) {
     layout.homework = { x: x + 384, y: y + 624, w: 628, h: 150 };
     layout.teacher = { x: x + 384, y: y + 798, w: 360, h: 110 };
     layout.challenge = { x: x + 768, y: y + 798, w: 244, h: 110 };
+    layout.differentiation = { x: x + 28, y: y + 934, w: 480, h: 150 };
+    layout.checks = { x: x + 532, y: y + 934, w: 480, h: 150 };
   } else {
     layout.lesson = { x: x + 28, y: y + 28, w: 360, h: 290 };
     (result.stages || []).slice(0, 5).forEach((_, idx) => { layout[`stage${idx}`] = { x: x + 420 + (idx % 2) * 300, y: y + 28 + Math.floor(idx / 2) * 138, w: 280, h: 116 }; });
@@ -11803,8 +11833,46 @@ function aiSmartLayout(center, result) {
     layout.homework = { x: x + 420, y: y + 470, w: 580, h: 170 };
     layout.teacher = { x: x + 420, y: y + 676, w: 360, h: 170 };
     layout.challenge = { x: x + 804, y: y + 676, w: 406, h: 150 };
+    layout.differentiation = { x: x + 28, y: y + 800, w: 360, h: 260 };
+    layout.checks = { x: x + 420, y: y + 870, w: 790, h: 190 };
   }
   return layout;
+}
+
+function applyAiCardSlot(card, slot) {
+  if (!card || !slot || card.data?.locked) return;
+  card.x = slot.x; card.y = slot.y; card.w = slot.w; card.h = slot.h;
+  const element = getCardEl(card.id);
+  if (element) {
+    element.style.left = `${card.x}px`; element.style.top = `${card.y}px`;
+    element.style.width = `${card.w}px`; element.style.height = `${card.h}px`;
+  }
+}
+
+function reflowAiFrame(frameId, requestedStyle = 'auto') {
+  const frame = state.cards.find(card => card.id === frameId && card.type === 'frame');
+  if (!frame?.data?.aiGenerated || !Array.isArray(frame.data.childIds)) { toast('This frame has no AI layout data'); return; }
+  const children = frame.data.childIds.map(id => state.cards.find(card => card.id === id)).filter(Boolean);
+  if (!children.length) { toast('No generated blocks found in this frame'); return; }
+  const stages = children.filter(card => card.data?.aiRole === 'stage').sort((a, b) => (a.data.aiStageIndex || 0) - (b.data.aiStageIndex || 0));
+  const ignoreIds = new Set([frame.id, ...children.map(card => card.id)]);
+  const center = { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 };
+  const layout = aiSmartLayout(center, { mode: frame.data.aiMode || 'lesson-board', stages }, requestedStyle, ignoreIds);
+  snapshot();
+  _snapshotSuspendDepth += 1;
+  applyAiCardSlot(frame, layout.frame);
+  children.forEach(card => {
+    const role = card.data?.aiRole;
+    const key = role === 'stage' ? `stage${card.data.aiStageIndex || 0}` : role;
+    applyAiCardSlot(card, layout[key]);
+  });
+  frame.data.aiLayout = layout.style;
+  _snapshotSuspendDepth = Math.max(0, _snapshotSuspendDepth - 1);
+  renderAllArrows();
+  scheduleSave(); saveLocal?.();
+  showLayerPopover(frame.id);
+  setTimeout(() => zoomToCard(frame.id, true), 60);
+  toast(`AI frame reflowed · ${layout.style}`);
 }
 
 function applyAiAssistantToBoard() {
@@ -11816,12 +11884,16 @@ function applyAiAssistantToBoard() {
   setAiActionBusy('ai-apply-btn', true, 'Applying…', 'Apply to board');
   snapshot();
   const beforeCardIds = new Set(state.cards.map(card => card.id));
+  _snapshotSuspendDepth += 1;
   const center = screenToBoard(window.innerWidth * .52, window.innerHeight * .48) || { x: 300, y: 220 };
   const layout = aiSmartLayout(center, result);
   const frame = addCard('frame', layout.frame.x, layout.frame.y, {
     title: result.title || 'AI Lesson Flow',
     bg: 'rgba(202,255,50,.08)',
     border: 'rgba(236,72,153,.32)',
+    aiGenerated: true,
+    aiLayout: layout.style,
+    aiMode: result.mode || 'lesson-board',
   }, layout.frame.w, layout.frame.h);
   const lesson = addCard('lesson', layout.lesson.x, layout.lesson.y, {
     title: result.title || 'AI Lesson',
@@ -11833,6 +11905,7 @@ function applyAiAssistantToBoard() {
     objectives: (result.stages || []).slice(0, 3).map(s => s.goal || s.title).filter(Boolean),
     attachments: [],
     notes: [`Generated by TeachEd AI Assistant (${result.provider || 'local'}). Review before teaching.`, ...(result.memoryHints || [])].join('\n'),
+    aiRole: 'lesson',
   }, layout.lesson.w, layout.lesson.h);
   const stageCards = [];
   (result.stages || []).slice(0, 5).forEach((stage, idx) => {
@@ -11843,49 +11916,76 @@ function applyAiAssistantToBoard() {
       textColor: '#15131d',
       fontFamily: 'var(--font)',
       align: 'left',
+      aiRole: 'stage',
+      aiStageIndex: idx,
     }), slot.w, slot.h));
   });
   if (result.vocabulary?.length) {
     addCard('checklist', layout.vocabulary.x, layout.vocabulary.y, {
       title: 'Target language',
       items: result.vocabulary.slice(0, 8).map(text => ({ text, done: false })),
+      aiRole: 'vocabulary',
     }, layout.vocabulary.w, layout.vocabulary.h);
   }
   if (result.mistakeItems?.length || result.memoryHints?.length) {
     addCard('note', layout.memory.x, layout.memory.y, {
       title: 'AI Memory Notes',
       text: [...(result.memoryHints || []), ...(result.mistakeItems || []).map(x => 'Mistake focus: ' + x)].join('\n'),
+      aiRole: 'memory',
     }, layout.memory.w, layout.memory.h);
   }
   if (result.modeAddons?.length) {
     addCard('checklist', layout.extras.x, layout.extras.y, {
       title: 'Smart extras',
       items: result.modeAddons.map(text => ({ text, done: false })),
+      aiRole: 'extras',
     }, layout.extras.w, layout.extras.h);
   }
   if (result.warmupPrompts?.length) {
     addCard('sticky', layout.warmup.x, layout.warmup.y, {
       text: result.warmupPrompts.join('\n'),
       color: STICKY_COLORS[1] || '#d9f99d',
+      aiRole: 'warmup',
     }, layout.warmup.w, layout.warmup.h);
   }
   if (result.assessmentCriteria?.length) {
     addCard('checklist', layout.criteria.x, layout.criteria.y, {
       title: 'Success criteria',
       items: result.assessmentCriteria.map(text => ({ text, done: false })),
+      aiRole: 'criteria',
     }, layout.criteria.w, layout.criteria.h);
   }
   if (result.teacherScript?.length) {
     addCard('note', layout.teacher.x, layout.teacher.y, {
       title: 'Teacher script',
       text: result.teacherScript.join('\n'),
+      aiRole: 'teacher',
     }, layout.teacher.w, layout.teacher.h);
   }
   if (result.challenge) {
     addCard('sticky', layout.challenge.x, layout.challenge.y, {
       text: 'Challenge:\n' + result.challenge,
       color: STICKY_COLORS[2] || '#fde68a',
+      aiRole: 'challenge',
     }, layout.challenge.w, layout.challenge.h);
+  }
+  if (result.differentiation) {
+    addCard('checklist', layout.differentiation.x, layout.differentiation.y, {
+      title: 'Differentiation routes',
+      items: [
+        ...(result.differentiation.support || []).map(text => ({ text: `Support · ${text}`, done: false })),
+        ...(result.differentiation.core || []).map(text => ({ text: `Core · ${text}`, done: false })),
+        ...(result.differentiation.stretch || []).map(text => ({ text: `Stretch · ${text}`, done: false })),
+      ].slice(0, 9),
+      aiRole: 'differentiation',
+    }, layout.differentiation.w, layout.differentiation.h);
+  }
+  if (result.checks?.length) {
+    addCard('note', layout.checks.x, layout.checks.y, {
+      title: 'Checks for understanding',
+      text: result.checks.map((text, index) => `${index + 1}. ${text}`).join('\n'),
+      aiRole: 'checks',
+    }, layout.checks.w, layout.checks.h);
   }
   if (result.homework) {
     var homeworkCard = addCard('assignment', layout.homework.x, layout.homework.y, {
@@ -11896,6 +11996,7 @@ function applyAiAssistantToBoard() {
       desc: result.homework,
       submitted: 0,
       total: 0,
+      aiRole: 'homework',
     }, layout.homework.w, layout.homework.h);
   }
   // Turn the generated pack into a navigable flow, not a pile of unrelated cards.
@@ -11911,6 +12012,7 @@ function applyAiAssistantToBoard() {
       .filter(c => c.id !== frame.id && !beforeCardIds.has(c.id))
       .map(c => c.id);
   }
+  _snapshotSuspendDepth = Math.max(0, _snapshotSuspendDepth - 1);
   clearSelection();
   if (lesson?.id) selectCard(lesson.id);
   renderAllArrows?.();
