@@ -2623,6 +2623,7 @@ body.board-dragging .board-card{will-change:transform,left,top;}
     <a class="user-menu-item" href="index.html">🏠 Home</a>
     <div class="user-menu-item" onclick="showBoardList()">📋 My Boards</div>
     <div class="user-menu-item" onclick="newBoard()">➕ New Board</div>
+    <div class="user-menu-item" onclick="openTeacherToolBuilderUI()">🧰 Teacher Tools</div>
     <div class="user-menu-item" onclick="openVersionHistory()">🕐 Version History</div>
     <div style="height:1px;background:var(--border);margin:4px 0;"></div>
     <a class="user-menu-item" href="courses.html">📚 Courses</a>
@@ -14824,6 +14825,136 @@ if('serviceWorker'in navigator){
     </div>
   </div>
 </div>
+<!-- Teacher Tool Builder (ported from teachedos) -->
+<style>
+#tool-builder-panel{
+  position:fixed;inset:0;background:rgba(15,10,24,.48);backdrop-filter:blur(7px);
+  z-index:4120;display:none;align-items:center;justify-content:center;padding:22px;
+}
+#tool-builder-panel.open{display:flex;}
+.tbuilder-box{
+  width:min(1040px,100%);max-height:min(88vh,780px);overflow:auto;border-radius:28px;
+  background:linear-gradient(145deg,#ffffff 0%,#fffaf1 48%,#eff7ff 100%);
+  border:1px solid rgba(17,24,39,.08);box-shadow:0 28px 90px rgba(10,8,24,.26);
+  padding:24px;color:#171420;
+}
+.tbuilder-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:16px;}
+.tbuilder-kicker{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#4262FF;font-weight:950;}
+.tbuilder-title{font-size:clamp(28px,4vw,46px);line-height:.94;letter-spacing:-.055em;font-weight:950;margin:6px 0;}
+.tbuilder-sub{max-width:640px;color:#5f6070;font-size:13px;line-height:1.55;font-weight:700;}
+.tbuilder-close{border:0;background:rgba(17,24,39,.08);width:36px;height:36px;border-radius:13px;font-size:18px;font-weight:900;color:#171420;}
+.tbuilder-layout{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(360px,1.15fr);gap:16px;}
+.tbuilder-form,.tbuilder-preview{
+  border:1px solid rgba(17,24,39,.08);border-radius:22px;background:rgba(255,255,255,.86);
+  box-shadow:0 12px 38px rgba(17,24,39,.06);padding:18px;
+}
+.tbuilder-form label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#7b7282;font-weight:950;margin:12px 0 6px;}
+.tbuilder-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.tbuilder-form input,.tbuilder-form select,.tbuilder-form textarea{
+  width:100%;border:1.5px solid rgba(17,24,39,.10);border-radius:13px;background:#fff;color:#171420;
+  padding:11px 12px;font:750 13px/1.35 var(--font);outline:none;
+}
+.tbuilder-form textarea{min-height:86px;resize:vertical;}
+.tbuilder-form input:focus,.tbuilder-form select:focus,.tbuilder-form textarea:focus{border-color:#4262FF;box-shadow:0 0 0 4px rgba(66,98,255,.10);}
+.tbuilder-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px;}
+.tbuilder-btn{border:0;border-radius:14px;background:#111018;color:#fff;font-weight:950;padding:11px 14px;cursor:pointer;}
+.tbuilder-btn.lime{background:#C8E632;color:#101010;}
+.tbuilder-btn.blue{background:#4262FF;color:#fff;}
+.tbuilder-btn.ghost{background:rgba(17,24,39,.07);color:#171420;}
+.tbuilder-preview{background:#111018;color:#fff;min-height:440px;}
+.tbuilder-preview-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px;align-items:center;}
+.tbuilder-preview-title{font-size:17px;font-weight:950;letter-spacing:-.02em;}
+.tbuilder-chip{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);border-radius:999px;padding:6px 9px;font-size:10px;font-weight:900;color:#C8E632;}
+.tbuilder-output{display:grid;gap:10px;}
+.tbuilder-section{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:16px;padding:13px;}
+.tbuilder-section h4{margin:0 0 7px;color:#fff;font-size:14px;}
+.tbuilder-section p,.tbuilder-section li{font-size:12px;line-height:1.52;color:rgba(255,255,255,.76);font-weight:650;}
+.tbuilder-section ul{margin:0;padding-left:18px;}
+.tbuilder-empty{height:320px;display:grid;place-items:center;text-align:center;color:rgba(255,255,255,.58);font-weight:750;line-height:1.5;}
+@media(max-width:760px){
+  #tool-builder-panel{padding:10px;align-items:flex-end;}
+  .tbuilder-box{border-radius:24px 24px 0 0;max-height:92dvh;padding:18px;}
+  .tbuilder-layout{grid-template-columns:1fr;}
+  .tbuilder-row{grid-template-columns:1fr;}
+}
+</style>
+<div id="tool-builder-panel">
+  <div class="tbuilder-box">
+    <div class="tbuilder-top">
+      <div>
+        <div class="tbuilder-kicker" id="tbuilder-kicker">Teacher tool constructor</div>
+        <div class="tbuilder-title" id="tbuilder-title">Build a classroom task</div>
+        <div class="tbuilder-sub" id="tbuilder-sub">Choose a tool, add your topic/source/vocabulary, generate a teacher-ready activity, then place it on the board as structured cards.</div>
+      </div>
+      <button class="tbuilder-close" onclick="closeTeacherToolBuilder()" aria-label="Close teacher tool builder">×</button>
+    </div>
+    <div class="tbuilder-layout">
+      <div class="tbuilder-form">
+        <label for="tbuilder-tool">Tool</label>
+        <select id="tbuilder-tool"></select>
+        <div class="tbuilder-row">
+          <div>
+            <label for="tbuilder-level">Level</label>
+            <select id="tbuilder-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option><option>C2</option></select>
+          </div>
+          <div>
+            <label for="tbuilder-count">Items</label>
+            <select id="tbuilder-count"><option>4</option><option selected>6</option><option>8</option><option>10</option><option>12</option></select>
+          </div>
+        </div>
+        <label for="tbuilder-topic">Topic / grammar focus</label>
+        <input id="tbuilder-topic" value="Travel problems" placeholder="e.g. job interview, past simple, climate change">
+        <label for="tbuilder-source">Source text / lesson notes</label>
+        <textarea id="tbuilder-source" placeholder="Paste a text, transcript, teacher notes or exam task..."></textarea>
+        <label for="tbuilder-vocab">Target vocabulary</label>
+        <textarea id="tbuilder-vocab" placeholder="One word or phrase per line...">delay
+reservation
+boarding pass
+complaint
+solution
+polite request</textarea>
+        <label for="tbuilder-extra">Student difficulty / teacher instruction</label>
+        <textarea id="tbuilder-extra" placeholder="e.g. weak examples, articles, short answers, needs more confidence..."></textarea>
+        <div class="tbuilder-actions">
+          <button class="tbuilder-btn lime" onclick="generateTeacherToolBuilder()">Generate task</button>
+          <button class="tbuilder-btn blue" onclick="applyTeacherToolBuilderToBoard()">Add to board</button>
+          <button class="tbuilder-btn ghost" onclick="copyTeacherToolBuilderOutput()">Copy</button>
+          <a class="tbuilder-btn ghost" href="teacher-tools.html" style="text-decoration:none;">Full hub →</a>
+        </div>
+      </div>
+      <div class="tbuilder-preview">
+        <div class="tbuilder-preview-head">
+          <div class="tbuilder-preview-title">Preview</div>
+          <div class="tbuilder-chip" id="tbuilder-chip">not generated</div>
+        </div>
+        <div class="tbuilder-output" id="tbuilder-output">
+          <div class="tbuilder-empty">Choose a tool from the left panel.<br>Then generate a real classroom task here.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="js/teacher-tools-data.js"></script>
+<script src="js/teacher-tool-builder.js"></script>
+<!-- Arrow waypoints + endpoint drag (ported from teachedos) -->
+<style>
+#arrows-svg .arrow-endpoint-handle{
+  fill:#fff;stroke:#4262FF;stroke-width:2;cursor:grab;pointer-events:all;
+  transition:r .12s,transform .08s;
+  filter:drop-shadow(0 1px 3px rgba(5,5,40,.20));
+}
+#arrows-svg .arrow-endpoint-handle:hover{stroke-width:2.5;}
+#arrows-svg .arrow-endpoint-handle.dragging{cursor:grabbing;fill:#4262FF;}
+#arrows-svg .anchor-snap-hint{fill:#4262FF;fill-opacity:.18;stroke:#4262FF;stroke-width:1.5;pointer-events:none;}
+#arrows-svg .arrow-waypoint-handle{
+  fill:#fff;stroke:#4262FF;stroke-width:2;cursor:grab;pointer-events:all;
+  transition:r .12s;
+  filter:drop-shadow(0 1px 2px rgba(5,5,40,.20));
+}
+#arrows-svg .arrow-waypoint-handle:hover{r:6;}
+#arrows-svg .arrow-waypoint-handle.dragging{cursor:grabbing;fill:#4262FF;}
+</style>
+<script src="js/arrow-waypoints.js"></script>
 <script src="pwa.js"></script>
 <script src="scripts/nav-boost.js" defer></script>
 <script src="scripts/mobile-perf.js" defer></script>
